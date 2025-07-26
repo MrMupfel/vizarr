@@ -40,7 +40,7 @@ async function normalizeStore(source: string | zarr.Readable): Promise<zarr.Loca
       // grab the path and then set the URL to the root
       path = ensureAbosolutePath(url.pathname);
       url.pathname = "/";
-      store = new zarr.FetchStore(url.href);
+      store = new zarr.FetchStore(url.href, { overrides: { credentials: 'include' } });
     }
 
     // Wrap remote stores in a cache

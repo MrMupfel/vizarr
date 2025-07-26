@@ -131,7 +131,7 @@ export class ZarrPixelSource implements viv.PixelSource<Array<string>> {
   async #fetchPending() {
     for (const { request, resolve, reject } of this.#pending) {
       zarr
-        .get(this.#arr, request.selection, { opts: { signal: request.signal } })
+        .get(this.#arr, request.selection, { opts: { signal: request.signal, overrides: { credentials: 'include' } } })
         .then(({ data, shape }) => {
           resolve({
             data: this.#transform(data),
