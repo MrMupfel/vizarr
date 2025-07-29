@@ -43,5 +43,14 @@ export default defineConfig({
   },
   server: {
     open: `?source=${process.env.VIZARR_DATA || "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.1/6001253.zarr"}`,
+    //  --------DEV--------
+    proxy: {
+      '/local-data': {
+        target: 'http://192.168.0.94:3000', // Your local server
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/local-data/, ''),
+      },
+    },
+    // -------- DEV --------
   },
 });

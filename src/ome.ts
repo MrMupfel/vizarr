@@ -71,7 +71,7 @@ export async function loadWell(
           name: String(offset),
           row,
           col,
-          loader: new ZarrPixelSource(data[offset], { labels: axis_labels, tileSize }),
+          loader: new ZarrPixelSource(data[offset], { labels: axis_labels, tileSize, multiscales: imgAttrs.multiscales }),
         };
       });
   });
@@ -195,7 +195,7 @@ export async function loadPlate(
       name: `${row}${col}`,
       row: rows.indexOf(row),
       col: columns.indexOf(col),
-      loader: new ZarrPixelSource(d[1], { labels: axis_labels, tileSize }),
+      loader: new ZarrPixelSource(d[1], { labels: axis_labels, tileSize, multiscales: imgAttrs.multiscales }),
     };
   });
   let meta: Meta;
@@ -254,7 +254,7 @@ export async function loadOmeMultiscales(
   const axis_labels = utils.getNgffAxisLabels(axes);
   const meta = parseOmeroMeta(attrs.omero, axes);
   const tileSize = utils.guessTileSize(data[0]);
-  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize }));
+  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize, multiscales: attrs.multiscales }));
   const labels = await resolveOmeLabelsFromMultiscales(grp);
   return {
     loader: loader,
@@ -287,7 +287,7 @@ async function loadOmeImageLabel(root: zarr.Location<zarr.Readable>, name: strin
   return {
     name,
     modelMatrix: utils.coordinateTransformationsToMatrix(attrs.multiscales),
-    loader: data.map((arr) => new ZarrPixelSource(arr, { labels, tileSize })),
+    loader: data.map((arr) => new ZarrPixelSource(arr, { labels, tileSize, multiscales: attrs.multiscales })),
     colors: colors.length > 0 ? colors : undefined,
   };
 }

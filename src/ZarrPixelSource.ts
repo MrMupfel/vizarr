@@ -24,6 +24,7 @@ export class ZarrPixelSource implements viv.PixelSource<Array<string>> {
   readonly #transform: (
     arr: zarr.TypedArray<zarr.NumberDataType | zarr.BigintDataType>,
   ) => zarr.TypedArray<Lowercase<viv.SupportedDtype>>;
+  readonly omeMeta?: Ome.Multiscale[];
 
   #pendingId: undefined | number = undefined;
   #pending: Array<{
@@ -35,23 +36,57 @@ export class ZarrPixelSource implements viv.PixelSource<Array<string>> {
     };
   }> = [];
 
+  // In src/ZarrPixelSource.ts
   constructor(
     arr: zarr.Array<zarr.DataType, zarr.Readable>,
-    options: { labels: viv.Labels<Array<string>>; tileSize: number },
+    options: { labels: viv.Labels<Array<string>>; tileSize: number; multiscales?: Ome.Multiscale[] },
   ) {
     assert(arr.is("number") || arr.is("bigint"), `Unsupported viv dtype: ${arr.dtype}`);
     this.#arr = arr;
     this.labels = options.labels;
     this.tileSize = options.tileSize;
-    /**
-     * Some `zarrita` data types are not supported by Viv and require casting.
-     *
-     * Note how the casted type in the transform function is type-cast to `zarr.TypedArray<typeof arr.dtype>`.
-     * This ensures that the function body is correct based on whatever type narrowing we do in the if/else
-     * blocks based on dtype.
-     *
-     * TODO: Maybe we should add a console warning?
-     */
+    this.omeMeta = options.multiscales;
+
+    // --- BEGIN PIXEL SIZE CALCULATION (REVISED) ---
+    if (this.omeMeta) {
+      const multiscale = this.omeMeta[0];
+
+      // Find the dataset metadata that corresponds to THIS ZarrPixelSource instance
+      // by checking if the array's path ends with the path from the metadata.
+      const matchingDataset = multiscale.datasets.find(d => this.#arr.path.endsWith(d.path));
+
+      if (matchingDataset) {
+        const scaleTransform = matchingDataset.coordinateTransformations?.find(
+          (transform) => transform.type === 'scale'
+        );
+
+        if (scaleTransform?.type === 'scale') {
+          const { axes } = multiscale;
+          const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
+            typeof axis === 'string' ? { name: axis } : axis
+          );
+          const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
+          const yIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'y');
+
+          const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
+          const unit = spaceAxis?.unit ?? 'pixels';
+
+          if (xIndex !== -1 && yIndex !== -1) {
+            const pixelSizeX = scaleTransform.scale[xIndex];
+            const pixelSizeY = scaleTransform.scale[yIndex];
+
+            // console.log(`--- 🔬 Pixel Size for ${matchingDataset.path} ---`);
+            // console.log(`X-axis pixel size: ${pixelSizeX} ${unit}/pixel`);
+            // console.log(`Y-axis pixel size: ${pixelSizeY} ${unit}/pixel`);
+            // console.log('----------------------------------------------------');
+          }
+        }
+      } else {
+        console.warn(`[Debug] Could not find matching dataset for Zarr array path: "${this.#arr.path}"`);
+      }
+    }
+    // --- END PIXEL SIZE CALCULATION ---
+
     if (arr.dtype === "uint64" || arr.dtype === "int64") {
       this.dtype = "Uint32";
       this.#transform = (x) => Uint32Array.from(x as zarr.TypedArray<typeof arr.dtype>, (bint) => Number(bint));
@@ -63,6 +98,35 @@ export class ZarrPixelSource implements viv.PixelSource<Array<string>> {
       this.#transform = (x) => x as zarr.TypedArray<typeof arr.dtype>;
     }
   }
+
+  // constructor(
+  //   arr: zarr.Array<zarr.DataType, zarr.Readable>,
+  //   options: { labels: viv.Labels<Array<string>>; tileSize: number },
+  // ) {
+  //   assert(arr.is("number") || arr.is("bigint"), `Unsupported viv dtype: ${arr.dtype}`);
+  //   this.#arr = arr;
+  //   this.labels = options.labels;
+  //   this.tileSize = options.tileSize;
+  //   /**
+  //    * Some `zarrita` data types are not supported by Viv and require casting.
+  //    *
+  //    * Note how the casted type in the transform function is type-cast to `zarr.TypedArray<typeof arr.dtype>`.
+  //    * This ensures that the function body is correct based on whatever type narrowing we do in the if/else
+  //    * blocks based on dtype.
+  //    *
+  //    * TODO: Maybe we should add a console warning?
+  //    */
+  //   if (arr.dtype === "uint64" || arr.dtype === "int64") {
+  //     this.dtype = "Uint32";
+  //     this.#transform = (x) => Uint32Array.from(x as zarr.TypedArray<typeof arr.dtype>, (bint) => Number(bint));
+  //   } else if (arr.dtype === "float16") {
+  //     this.dtype = "Float32";
+  //     this.#transform = (x) => new Float32Array(x as zarr.TypedArray<typeof arr.dtype>);
+  //   } else {
+  //     this.dtype = capitalize(arr.dtype);
+  //     this.#transform = (x) => x as zarr.TypedArray<typeof arr.dtype>;
+  //   }
+  // }
 
   get #width() {
     const lastIndex = this.shape.length - 1;

@@ -77,6 +77,7 @@ export async function createSourceData(config: ImageLayerConfig): Promise<Source
   const node = await utils.open(config.source);
   let data: zarr.Array<zarr.DataType, zarr.Readable>[];
   let axes: Ome.Axis[] | undefined;
+  let multiscales: Ome.Multiscale[] | undefined;
 
   if (node instanceof zarr.Group) {
     let attrs = utils.resolveAttrs(node.attrs);
@@ -107,6 +108,7 @@ export async function createSourceData(config: ImageLayerConfig): Promise<Source
       throw new utils.RedirectError("Please open in ome-ngff-validator", toUrl);
     }
     utils.assert(utils.isMultiscales(attrs), "Group is missing multiscales specification.");
+    multiscales = attrs.multiscales;
     data = await utils.loadMultiscales(node, attrs.multiscales);
     if (attrs.multiscales[0].axes) {
       axes = utils.getNgffAxes(attrs.multiscales);
@@ -119,7 +121,7 @@ export async function createSourceData(config: ImageLayerConfig): Promise<Source
   const { channel_axis, labels } = getAxisLabelsAndChannelAxis(config, axes, data[0]);
 
   const tileSize = utils.guessTileSize(data[0]);
-  const loader = data.map((d) => new ZarrPixelSource(d, { labels, tileSize }));
+  const loader = data.map((d) => new ZarrPixelSource(d, { labels, tileSize, multiscales }));
   const [base] = loader;
 
   // If explicit channel axis is provided, try to load as multichannel.

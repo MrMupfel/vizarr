@@ -19,6 +19,7 @@ import {
 } from "./state";
 import theme from "./theme";
 import { defer, typedEmitter } from "./utils";
+import ScaleBarInfo from "./components/ScaleBarInfo";
 
 export { version } from "../package.json";
 
@@ -95,6 +96,7 @@ export function createViewer(element: HTMLElement, options: { menuOpen?: boolean
           <ViewStateContext.Provider value={viewStateAtomWithEffect}>
             <Menu open={options.menuOpen ?? true} />
             <Viewer />
+            <ScaleBarInfo />
           </ViewStateContext.Provider>
         )}
         {sourceError !== null && (
