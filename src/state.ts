@@ -19,6 +19,7 @@ import {
   type MultiscaleImageLayerProps,
 } from "./layers/viv-layers";
 
+
 export interface ViewState {
   zoom: number;
   target: [number, number];
@@ -178,9 +179,9 @@ const imageLabelsIstanceFamily = atomFamily((a: Atom<LayerState>) =>
     return labels.map((label) =>
       label.on
         ? new LabelLayer({
-            ...label.layerProps,
-            selection: label.transformSourceSelection(layerProps.selections[0]),
-          })
+          ...label.layerProps,
+          selection: label.transformSourceSelection(layerProps.selections[0]),
+        })
         : null,
     );
   }),
@@ -193,5 +194,6 @@ export const layerAtoms = atom((get) => {
     layerAtoms.push(layerInstanceFamily(layerStateAtom));
     layerAtoms.push(imageLabelsIstanceFamily(layerStateAtom));
   }
+  
   return get(waitForAll(layerAtoms)).flat();
 });

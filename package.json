@@ -11,13 +11,15 @@
     "check": "tsc"
   },
   "dependencies": {
+    "@deck.gl-community/editable-layers": "^9.0.2",
+    "@deck.gl/layers": "^9.0.41",
     "@hms-dbmi/viv": "~0.17.2",
     "@material-ui/core": "^4.11.0",
     "@material-ui/icons": "^4.9.1",
     "@material-ui/styles": "^4.11.5",
     "@vivjs/types": "~0.17.0",
     "@zarrita/storage": "0.1.0",
-    "deck.gl": "~9.0.0",
+    "deck.gl": "~9.0.41",
     "jotai": "^1.0.0",
     "just-debounce-it": "^3.1.1",
     "math.gl": "^4.1.0",
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^22.13.5",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.2.18",
@@ -38,8 +41,19 @@
   },
   "packageManager": "pnpm@9.5.0",
   "pnpm": {
+    "overrides": {
+      "deck.gl": "9.0.41",
+      "@deck.gl/core": "9.0.41",
+      "@deck.gl/layers": "9.0.41",
+      "@deck.gl/react": "9.0.41",
+      "@luma.gl/core": "9.0.28",
+      "@luma.gl/engine": "9.0.28",
+      "@luma.gl/shadertools": "9.0.28",
+      "@luma.gl/webgl": "9.0.28",
+      "@luma.gl/gltf": "9.0.28"
+    },
     "patchedDependencies": {
-      "@vivjs/loaders@0.17.2": "patches/@vivjs__loaders@0.17.2.patch"
+      "@vivjs/loaders@0.17.3": "patches/@vivjs__loaders@0.17.2.patch"
     }
   }
 }
