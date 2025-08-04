@@ -1,7 +1,8 @@
 // src/components/ScaleBarInfo.tsx
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import * as React from "react";
 import { sourceInfoAtom, viewStateAtom } from "../state";
+import { set } from "zarrita";
 
 // Component to render the scale bar.
 export default function ScaleBarInfo() {
@@ -52,7 +53,7 @@ export default function ScaleBarInfo() {
 
         // The current size of a screen pixel, now in nanometers.
         const currentPixelSizeInNm = baseSizeInNm * Math.pow(2, -viewState.zoom);
-
+        
         const TARGET_BAR_WIDTH_PX = 150;
         const roughLengthInNm = TARGET_BAR_WIDTH_PX * currentPixelSizeInNm;
 

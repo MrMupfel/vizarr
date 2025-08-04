@@ -27,6 +27,9 @@ importers:
       '@deck.gl-community/editable-layers':
         specifier: ^9.0.2
         version: 9.1.1(x22q3rkyrcu3x5ssoqwbios7uq)
+      '@deck.gl/core':
+        specifier: 9.0.41
+        version: 9.0.41
       '@deck.gl/layers':
         specifier: 9.0.41
         version: 9.0.41(@deck.gl/core@9.0.41)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.0.28)(@luma.gl/engine@9.0.28(@luma.gl/core@9.0.28))

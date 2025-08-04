@@ -1,12 +1,12 @@
-import { Grid, IconButton, Tooltip, Divider } from "@material-ui/core";
-import { Add, Remove, Create, PanTool, SquareFoot } from "@material-ui/icons";
+import { Grid, IconButton, Tooltip, Divider, FormControlLabel, Switch, Typography } from "@material-ui/core";
+import { Add, Remove, CropSquare, ControlCameraRounded, FormatShapesRounded, ChangeHistoryRounded } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/styles";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import React, { useReducer } from "react";
 
 import { SourceDataContext } from "../hooks";
 import { sourceInfoAtomAtoms, viewStateAtom } from "../state";
-import { editModeAtom, type EditMode } from "../roi-state";
+import { editModeAtom, type EditMode, isTextVisibleAtom, isRoiVisibleAtom } from "../roi-state";
 import LayerController from "./LayerController";
 
 const useStyles = makeStyles({
@@ -43,6 +43,9 @@ function Menu(props: { open?: boolean }) {
   // Get the current mode and the function to change it from our ROI state file
   const currentMode = useAtomValue(editModeAtom);
   const setEditMode = useSetAtom(editModeAtom);
+  const [isTextVisible, setIsTextVisible] = useAtom(isTextVisibleAtom);
+  const [isRoiVisible, setIsRoiVisible] = useAtom(isRoiVisibleAtom);
+
 
   // Helper function to create a button
   const ToolButton = ({
@@ -57,7 +60,7 @@ function Menu(props: { open?: boolean }) {
     <Tooltip title={title}>
       <IconButton
         onClick={() => setEditMode(mode)}
-        color={currentMode === mode ? "primary" : "inherit"}
+        style={{ color: currentMode === mode ? '#ffbf77' : 'inherit' }}
         size="small"
       >
         {children}
@@ -75,14 +78,47 @@ function Menu(props: { open?: boolean }) {
           {/* ROI Drawing Toolbar */}
           <Grid container direction="row" className={classes.toolbar}>
             <ToolButton title="Pan & Zoom" mode="view">
-              <PanTool />
+              <ControlCameraRounded />
             </ToolButton>
             <ToolButton title="Draw Polygon" mode="drawPolygon">
-              <Create />
+              <ChangeHistoryRounded />
             </ToolButton>
-            <ToolButton title="Measure Distance" mode="measureDistance">
-              <SquareFoot />
+            <ToolButton title="Draw Rectangle" mode="drawRectangle">
+              <CropSquare />
             </ToolButton>
+            <ToolButton title="Edit/Modify ROI" mode="modify">
+              <FormatShapesRounded />
+            </ToolButton>
+          </Grid>
+
+          {/* Label Visibility Toggle */}
+          <Grid container item style={{ padding: '0 8px', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isTextVisible}
+                  onChange={(event) => setIsTextVisible(event.target.checked)}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label={<Typography style={{ fontSize: '0.9rem', color: '#fff' }}>Labels</Typography>}
+            />
+          </Grid>
+
+          {/* Roi Visibility Toggle */}
+          <Grid container item style={{ padding: '0 8px', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isRoiVisible}
+                  onChange={(event) => setIsRoiVisible(event.target.checked)}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label={<Typography style={{ fontSize: '0.9rem', color: '#fff' }}>ROIs</Typography>}
+            />
           </Grid>
 
           <Divider />

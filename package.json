@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@deck.gl-community/editable-layers": "^9.0.2",
+    "@deck.gl/core": "9.0.41",
     "@deck.gl/layers": "^9.0.41",
     "@hms-dbmi/viv": "~0.17.2",
     "@material-ui/core": "^4.11.0",
