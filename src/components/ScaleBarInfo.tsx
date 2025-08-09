@@ -1,63 +1,23 @@
 // src/components/ScaleBarInfo.tsx
-import { useAtomValue, useSetAtom } from "jotai";
 import * as React from "react";
-import { sourceInfoAtom, viewStateAtom } from "../state";
-import { set } from "zarrita";
+import { usePixelSize } from "../hooks";
 
 // Component to render the scale bar.
 export default function ScaleBarInfo() {
-    const sources = useAtomValue(sourceInfoAtom);
-    const viewState = useAtomValue(viewStateAtom);
+    // 1. Get the pixel size directly from our custom hook.
+    const currentPixelSizeInNm = usePixelSize();
 
-    // State to hold the calculated properties of the scale bar.
-    const [scaleBar, setScaleBar] = React.useState<{ width: number; text: string } | null>(null);
-
-    React.useEffect(() => {
-        if (!viewState || sources.length === 0) {
-            setScaleBar(null);
-            return;
+    // 2. Calculate the scale bar properties using React.useMemo.
+    // This will only re-run when the pixel size changes.
+    const scaleBar = React.useMemo(() => {
+        if (!currentPixelSizeInNm) {
+            return null;
         }
 
-        const sourceData = sources[0];
-        const baseLoader = sourceData.loader[0];
-        if (!baseLoader.omeMeta) return;
-
-        const multiscale = baseLoader.omeMeta[0];
-        const baseResolution = multiscale.datasets[0];
-        const scaleTransform = baseResolution.coordinateTransformations?.find(
-            (t) => t.type === 'scale'
-        );
-
-        if (scaleTransform?.type !== 'scale') return;
-
-        const { axes } = multiscale;
-        const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
-            typeof axis === 'string' ? { name: axis } : axis
-        );
-        const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
-        const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
-
-        if (xIndex === -1) return;
-
-        const basePixelSizeX = scaleTransform.scale[xIndex];
-        const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'pixels';
-
-        // 1. NORMALIZE the base size to nanometers.
-        // We'll assume the input unit is angstrom for this conversion.
-        let baseSizeInNm = basePixelSizeX;
-        if (inputUnit === 'angstrom') {
-            baseSizeInNm = basePixelSizeX / 10; // 10 Angstroms = 1 Nanometer
-        } else if (inputUnit === 'micrometer' || inputUnit === 'micron') {
-            baseSizeInNm = basePixelSizeX * 1000;
-        }
-
-        // The current size of a screen pixel, now in nanometers.
-        const currentPixelSizeInNm = baseSizeInNm * Math.pow(2, -viewState.zoom);
-        
         const TARGET_BAR_WIDTH_PX = 150;
         const roughLengthInNm = TARGET_BAR_WIDTH_PX * currentPixelSizeInNm;
 
-        // 2. CALCULATE the "nice number" length (the result is in nanometers).
+        // CALCULATE the "nice number" length (the result is in nanometers).
         const magnitude = Math.pow(10, Math.floor(Math.log10(roughLengthInNm)));
         const residual = roughLengthInNm / magnitude;
 
@@ -72,34 +32,30 @@ export default function ScaleBarInfo() {
             niceLengthInNm = 10 * magnitude;
         }
 
-        // 3. SELECT the best display unit and text label.
+        // SELECT the best display unit and text label.
         let display_text = '';
-        // If the length is less than 1000nm, display in nm.
         if (niceLengthInNm < 1000) {
             display_text = `${niceLengthInNm.toFixed(0)} nm`;
-        }
-        // Otherwise, convert to micrometers (µm).
-        else {
+        } else {
             const lengthInMicrons = niceLengthInNm / 1000;
-            // Use one decimal place for microns for better precision on smaller values (e.g., 1.5 µm).
             display_text = `${lengthInMicrons.toFixed(1)} µm`;
         }
 
         const finalBarWidth = niceLengthInNm / currentPixelSizeInNm;
 
-        setScaleBar({
+        return {
             width: finalBarWidth,
             text: display_text,
-        });
+        };
 
-    }, [viewState, sources]);
+    }, [currentPixelSizeInNm]);
 
     // If we haven't calculated a bar yet, render nothing.
     if (!scaleBar) {
         return null;
     }
 
-    // Render the visual elements for the scale bar.
+    // 3. The rendering logic remains exactly the same.
     return (
         <div
             style={{
@@ -110,7 +66,7 @@ export default function ScaleBarInfo() {
                 fontFamily: 'sans-serif',
                 fontSize: '14px',
                 textShadow: '1px 1px 2px black',
-                pointerEvents: 'none', // Make sure it doesn't block mouse events
+                pointerEvents: 'none',
             }}
         >
             <div
@@ -119,7 +75,7 @@ export default function ScaleBarInfo() {
                     width: `${scaleBar.width}px`,
                     backgroundColor: 'white',
                     border: '1px solid black',
-                    boxSizing: 'content-box', // Ensure border doesn't add to the width
+                    boxSizing: 'content-box',
                 }}
             />
             <div style={{ marginTop: '4px' }}>{scaleBar.text}</div>

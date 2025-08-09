@@ -1,5 +1,5 @@
 import { Grid, IconButton, Tooltip, Divider, FormControlLabel, Switch, Typography } from "@material-ui/core";
-import { Add, Remove, CropSquare, ControlCameraRounded, FormatShapesRounded, ChangeHistoryRounded } from "@material-ui/icons";
+import { Add, Remove, CropSquare, ControlCameraRounded, FormatShapesRounded, ChangeHistoryRounded, StraightenRounded } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/styles";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import React, { useReducer } from "react";
@@ -88,6 +88,9 @@ function Menu(props: { open?: boolean }) {
             </ToolButton>
             <ToolButton title="Edit/Modify ROI" mode="modify">
               <FormatShapesRounded />
+            </ToolButton>
+            <ToolButton title="Measure Distance" mode="measureDistance">
+              <StraightenRounded />
             </ToolButton>
           </Grid>
 

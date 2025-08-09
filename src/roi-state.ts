@@ -10,7 +10,7 @@ import {
 } from '@deck.gl-community/editable-layers';
 
 // Defines the names of the drawing modes we'll support.
-export type EditMode = 'view' | 'drawPolygon' | 'drawRectangle' | 'modify';
+export type EditMode = 'view' | 'drawPolygon' | 'drawRectangle' | 'modify' | 'measureDistance';
 
 // A mapping from our simple string mode names to the actual Deck.gl mode classes.
 // We define it here so other parts of the app can use it.

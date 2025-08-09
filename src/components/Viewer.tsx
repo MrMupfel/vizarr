@@ -2,16 +2,17 @@ import DeckGL from "deck.gl";
 import { OrthographicView } from "deck.gl";
 import { useAtomValue, useSetAtom } from "jotai"; // NEW: import useSetAtom
 import * as React from "react";
-import { useViewState } from "../hooks";
+import { useViewState, usePixelSize, useWorldPixelSizes } from "../hooks";
 import { layerAtoms } from "../state";
 import { fitImageToViewport, isGridLayerProps, isInterleaved, resolveLoaderFromLayerProps } from "../utils";
 
 // NEW: Import everything we need for the ROI layer
-import { EditableGeoJsonLayer } from '@deck.gl-community/editable-layers';
+import { EditableGeoJsonLayer, MeasureDistanceMode, } from '@deck.gl-community/editable-layers';
+// import type { EditAction } from '@deck.gl-community/editable-layers';
 import { ViewMode } from '@deck.gl-community/editable-layers'; // Default mode
-import { IconLayer, TextLayer } from '@deck.gl/layers';
+import { IconLayer, TextLayer, LineLayer } from '@deck.gl/layers';
 import { editModeAtom, modeMap, roiCollectionAtom, updateRoiAtom, selectedRoiIndexAtom, deleteSelectedRoiAtom, } from '../roi-state';
-import type { Feature, Geometry, FeatureCollection } from 'geojson';
+import type { Feature, Geometry, FeatureCollection, LineString, Position } from 'geojson';
 import type { DeckGLRef, OrthographicViewState } from "deck.gl";
 import type { VizarrLayer } from "../state";
 import { COORDINATE_SYSTEM } from '@deck.gl/core'
@@ -22,8 +23,26 @@ const DELETE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24
 // NEW: A data URL for the icon to be used in the IconLayer.
 const DELETE_ICON_URL = `data:image/svg+xml;base64,${btoa(DELETE_ICON_SVG)}`;
 
+type VizarrFeature = Feature<Geometry, { [key: string]: any }>;
+
+// New helper for anisotropic distance calculation
+function getAnisotropicLength(coordinates: Position[], pixelSizes: { x: number, y: number }): number {
+  if (!pixelSizes) return 0;
+  let totalLength = 0;
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const [x1, y1] = coordinates[i];
+    const [x2, y2] = coordinates[i + 1];
+    // Scale the distance of each segment by the per-axis pixel size
+    const dx_nm = (x2 - x1) * pixelSizes.x;
+    const dy_nm = (y2 - y1) * pixelSizes.y;
+    totalLength += Math.sqrt(Math.pow(dx_nm, 2) + Math.pow(dy_nm, 2));
+  }
+  return totalLength;
+}
+
+
 // NEW: A helper function to get the bounding box of a feature's geometry.
-function getFeatureBounds(feature: Feature): [number, number, number, number] | null {
+function getFeatureBounds(feature: VizarrFeature): [number, number, number, number] | null {
   if (!feature || !feature.geometry) return null;
 
   // This handles simple Polygons (like rectangles) and MultiPolygons.
@@ -53,32 +72,131 @@ export default function Viewer() {
   const isTextVisible = useAtomValue(isTextVisibleAtom);
   const isRoiVisible = useAtomValue(isRoiVisibleAtom);
 
-
   // Get the existing image layers from state.ts
   const imageLayers = useAtomValue(layerAtoms);
 
-  // NEW: Get all the state and setters needed for the ROI layer from roi-state.ts
+  // Get all the state and setters needed for the ROI layer from roi-state.ts
   const editMode = useAtomValue(editModeAtom);
   const roiCollection = useAtomValue(roiCollectionAtom);
   const setRoiUpdate = useSetAtom(updateRoiAtom);
   const selectedIndex = useAtomValue(selectedRoiIndexAtom);
   const setSelectedIndex = useSetAtom(selectedRoiIndexAtom);
-  const deleteRoi = useSetAtom(deleteSelectedRoiAtom); 
+  const deleteRoi = useSetAtom(deleteSelectedRoiAtom);
+
+  // Measurment
+  const worldPixelSizes = useWorldPixelSizes();
+  const [tentativeCoords, setTentativeCoords] = React.useState<Position[]>([]);
+  const [liveMeasurement, setLiveMeasurement] = React.useState<{ text: string, position: Position } | null>(null);
+  const [pointerPosition, setPointerPosition] = React.useState<Position | null>(null);
+
+  // Define a callback function to control the cursor
+  const getCursor = React.useCallback((state: { isDragging: boolean; isHovering: boolean; }) => {
+    // If we're in 'view' mode, we are responsible for the hand cursor.
+    if (editMode === 'view') {
+      // Use 'grabbing' (closed hand) if dragging, otherwise 'grab' (open hand).
+      return state.isDragging ? 'grabbing' : 'grab';
+    } else if (editMode === 'measureDistance') {
+      return state.isHovering ? 'crosshair' : 'crosshair';
+    } else {
+      return 'default';
+    }
+  }, [editMode]);
+
+
+  React.useEffect(() => {
+    if (editMode !== 'measureDistance') {
+      // Clear all measurement state when not measuring
+      setLiveMeasurement(null);
+      setTentativeCoords([]);
+    }
+  }, [editMode]);
+
+  const measurementLineLayer = React.useMemo(() => {
+    // Don't draw anything if we haven't started
+    if (tentativeCoords.length === 0) return null;
+
+    // If we have ONE point, draw a "rubber band" line from it to the live pointer
+    if (tentativeCoords.length === 1 && pointerPosition) {
+      return new LineLayer({
+        id: 'measurement-line-layer-live', // Use a different ID for the live version
+        data: [{ sourcePosition: tentativeCoords[0], targetPosition: pointerPosition }],
+        getSourcePosition: d => d.sourcePosition,
+        getTargetPosition: d => d.targetPosition,
+        getColor: [0, 255, 255, 100], // Make the live line slightly transparent
+        getWidth: 2,
+      });
+    }
+
+    // If we have TWO points, draw the final, solid line
+    if (tentativeCoords.length === 2) {
+      return new LineLayer({
+        id: 'measurement-line-layer-final', // Use a different ID for the final version
+        data: [{ sourcePosition: tentativeCoords[0], targetPosition: tentativeCoords[1] }],
+        getSourcePosition: d => d.sourcePosition,
+        getTargetPosition: d => d.targetPosition,
+        getColor: [0, 255, 255, 255], // Solid cyan color
+        getWidth: 2,
+      });
+    }
+    return null;
+  }, [tentativeCoords, pointerPosition]);
+
+  const liveTooltipLayer = React.useMemo(() => {
+    // If we are between the first and second click and have a pointer position
+    if (tentativeCoords.length === 1 && pointerPosition && worldPixelSizes) {
+      // Create a temporary line to the pointer to measure its length
+      const liveCoords = [tentativeCoords[0], pointerPosition];
+      const lengthInNm = getAnisotropicLength(liveCoords, worldPixelSizes);
+      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
+
+      return new TextLayer({
+        id: 'live-tooltip-layer-live',
+        data: [{ position: pointerPosition, text }],
+        getPosition: d => d.position,
+        getText: d => d.text,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getSize: 16,
+        getColor: [255, 255, 255, 255],
+        getPixelOffset: [50, 0],
+        backgroundColor: [0, 0, 0, 128],
+      });
+    }
+
+    // If the line is finished (2 clicks), show the final measurement
+    if (tentativeCoords.length === 2 && worldPixelSizes) {
+      const lengthInNm = getAnisotropicLength(tentativeCoords, worldPixelSizes);
+      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
+
+      return new TextLayer({
+        id: 'live-tooltip-layer-final',
+        data: [{ position: tentativeCoords[1], text }],
+        getPosition: d => d.position,
+        getText: d => d.text,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getSize: 16,
+        getColor: [255, 255, 255, 255],
+        getPixelOffset: [50, 0],
+        backgroundColor: [0, 0, 0, 128],
+      });
+    }
+
+    return null;
+  }, [tentativeCoords, pointerPosition, worldPixelSizes]);
+
 
   const roiTextLayer = React.useMemo(() => {
     return new TextLayer({
       id: 'roi-text-layer',
       visible: isTextVisible,
-      data: roiCollection.features,
+      data: roiCollection.features.filter(f => f.properties?.text),
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 
-      getPosition: (f: Feature) => {
+      getPosition: (f: VizarrFeature) => {
         const bounds = getFeatureBounds(f);
         return bounds ? [(bounds[0] + bounds[2]) / 2, bounds[3], 0] : [0, 0, 0];
       },
 
-      getText: (f: Feature) => f.properties?.text,
-
+      getText: (f: VizarrFeature): string => f.properties?.text || '',
       getColor: [0, 0, 0, 255],
       sizeUnits: 'pixels',
       getSize: 16,
@@ -88,57 +206,53 @@ export default function Viewer() {
       textAlign: 'middle',
       getAlignmentBaseline: 'top',
       getPixelOffset: [0, 10],
-    });
-  }, [roiCollection, isTextVisible]);
+    } as any);
+  }, [roiCollection, isTextVisible,]);
 
   // NEW: Create the EditableGeoJsonLayer instance using React.useMemo
   // This ensures the layer is only recreated when its data or the mode changes.
 
   const roiLayer = React.useMemo(() => {
+    const modeClass = editMode === 'measureDistance' ? ViewMode : modeMap[editMode];
     return new EditableGeoJsonLayer({
       id: 'roi-layer',
       visible: isRoiVisible,
       data: roiCollection as any,
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      mode: modeMap[editMode] || ViewMode,
-      onEdit: setRoiUpdate,
-
-      // Update the layer props
+      mode: modeClass,
       selectedFeatureIndexes: selectedIndex !== null ? [selectedIndex] : [],
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 
-      onClick: (info, event) => {
-        // Deselect if clicking on empty space in modify mode
-        if (info.index === -1 && editMode === 'modify') {
-          setSelectedIndex(null);
-        } else {
-          setSelectedIndex(info.index);
-        }
-      },
-
-      // Use a function to change color based on selection state
-      getFillColor: (feature: Feature, isSelected: boolean) =>
-        isSelected ? [255, 164, 61, 50] : [255, 0, 0, 0], // Orange highlight, otherwise red
-      getLineColor: (feature: Feature, isSelected: boolean) =>
-        isSelected ? [255, 164, 61, 255] : [255, 0, 0, 200], // Orange highlight, otherwise red
-
-      getTentativeFillColor: [255, 0, 0, 0],
-      getTentativeLineColor: [255, 0, 0, 100],
+      // HYBRID APPROACH: Use modeConfig ONLY to disable the default tooltip
+      // modeConfig: {
+      //   // Return null to prevent the default tooltip from rendering
+      //   formatTooltip: () => null,
+      // },
 
       _subLayerProps: {
         guides: {
-          getFillColor: [0, 255, 0, 50],
-          getLineColor: [0, 255, 0, 200],
-        },
+          // These styles apply to the grey preview shape while drawing
+          getFillColor: [0, 0, 0, 0],  
+          getLineColor: [255, 0, 0, 150],  
+        }
       },
+
+      onEdit: (action) => {
+        setRoiUpdate(action);
+      },
+
+      onClick: (info) => {
+        if (info.index > -1) {
+          setSelectedIndex(info.index);
+        } else {
+          setSelectedIndex(null);
+        }
+      },
+      getFillColor: (f, isSelected) => isSelected ? [255, 164, 61, 50] : [0, 0, 0, 0],
+      getLineColor: (f, isSelected) => isSelected ? [255, 164, 61, 255] : [255, 0, 0, 255],
     });
-  }, [
-    roiCollection,
-    editMode,
-    setRoiUpdate,
-    selectedIndex,
-    setSelectedIndex,
-    isRoiVisible,
-  ]);
+
+  }, [editMode, roiCollection, selectedIndex, setRoiUpdate, isRoiVisible, worldPixelSizes, setSelectedIndex]);
+
 
   // NEW: Create the IconLayer for the delete button.
   const deleteIconLayer = React.useMemo(() => {
@@ -202,20 +316,66 @@ export default function Viewer() {
   }
 
   // NEW: Combine the image layers and our new ROI layer into one array
-  const allLayers = [...imageLayers, roiLayer, deleteIconLayer, roiTextLayer, ].filter(Boolean);
+  const allLayers = [...imageLayers, roiLayer, deleteIconLayer, roiTextLayer, liveTooltipLayer, measurementLineLayer,].filter(Boolean);
 
   return (
     <DeckGL
       ref={deckRef}
       layers={allLayers} // Pass the combined array to DeckGL
+      getCursor={getCursor}
       viewState={viewState && { ortho: viewState }}
       onViewStateChange={(e: { viewState: OrthographicViewState }) =>
         // @ts-expect-error - deck doesn't know this should be ok
         setViewState(e.viewState)
       }
       views={[new OrthographicView({ id: "ortho", controller: true })]}
-    // this would be for screenshots
-    // parameters={{ preserveDrawingBuffer: true }}
+      // this would be for screenshots
+      // parameters={{ preserveDrawingBuffer: true }}
+
+      // Measurement logic to circumvent MeasureDistanceModes multi step measurement and dangling lines
+      onClick={(info) => {
+        // Only run this logic if we are in measure mode and the click was not on an existing ROI
+        if (editMode === 'measureDistance' && !info.object) {
+          const newPoint = info.coordinate as Position;
+
+          // If a line is already drawn (2 points), this click starts a new one.
+          if (tentativeCoords.length >= 2) {
+            setTentativeCoords([newPoint]);
+            setLiveMeasurement(null); // Hide old tooltip
+            return;
+          }
+
+          // This is the first click.
+          if (tentativeCoords.length === 0) {
+            setTentativeCoords([newPoint]);
+            setLiveMeasurement(null);
+            return;
+          }
+
+          // This is the second click, which finishes the measurement.
+          if (tentativeCoords.length === 1) {
+            const newCoords = [tentativeCoords[0], newPoint];
+            setTentativeCoords(newCoords);
+
+            if (worldPixelSizes) {
+              const lengthInNm = getAnisotropicLength(newCoords, worldPixelSizes);
+              const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
+              setLiveMeasurement({ text, position: newPoint });
+            }
+          }
+        }
+      }}
+      onHover={(info) => {
+        // Only update the pointer position if we are in the middle of a measurement
+        if (editMode === 'measureDistance' && tentativeCoords.length === 1) {
+          setPointerPosition(info.coordinate as Position);
+        } else {
+          // Clear the pointer position when not actively measuring to hide the rubber band
+          if (pointerPosition !== null) {
+            setPointerPosition(null);
+          }
+        }
+      }}
     />
   );
 }

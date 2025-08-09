@@ -11,7 +11,7 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@deck.gl-community/editable-layers": "^9.0.2",
+    "@deck.gl-community/editable-layers": "^9.1.1",
     "@deck.gl/core": "9.0.41",
     "@deck.gl/layers": "^9.0.41",
     "@hms-dbmi/viv": "~0.17.2",
