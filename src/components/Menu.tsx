@@ -31,6 +31,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
   },
   toolbar: {
+    margin: "0px 0px 4px",
     padding: "2px 4px",
     backgroundColor: "rgba(0, 0, 0, 0.59)",
     borderRadius: "4px",
@@ -80,25 +81,6 @@ function Menu(props: { open?: boolean }) {
           {hidden ? <Add /> : <Remove />}
         </IconButton>
         <div style={{ display: hidden ? "none" : "block", width: '100%' }}>
-          {/* ROI Drawing Toolbar */}
-          <Grid container direction="row" className={classes.toolbar}>
-            <ToolButton title="Pan & Zoom" mode="view">
-              <ControlCameraRounded />
-            </ToolButton>
-            <ToolButton title="Draw Polygon" mode="drawPolygon">
-              <ChangeHistoryRounded />
-            </ToolButton>
-            <ToolButton title="Draw Rectangle" mode="drawRectangle">
-              <CropSquare />
-            </ToolButton>
-            <ToolButton title="Edit/Modify ROI" mode="modify">
-              <FormatShapesRounded />
-            </ToolButton>
-            <ToolButton title="Measure Distance" mode="measureDistance">
-              <StraightenRounded />
-            </ToolButton>
-          </Grid>
-
 
           <Grid container direction="row" className={classes.visibility}> 
           {/* Label Visibility Toggle */}
@@ -126,6 +108,25 @@ function Menu(props: { open?: boolean }) {
               }
               label={<Typography style={{ fontSize: '0.9rem', color: '#fff' }}>ROIs</Typography>}
             />
+          </Grid>
+
+          {/* ROI Drawing Toolbar */}
+          <Grid container direction="row" className={classes.toolbar}>
+            <ToolButton title="Pan & Zoom" mode="view">
+              <ControlCameraRounded />
+            </ToolButton>
+            <ToolButton title="Draw Polygon" mode="drawPolygon">
+              <ChangeHistoryRounded />
+            </ToolButton>
+            <ToolButton title="Draw Rectangle" mode="drawRectangle">
+              <CropSquare />
+            </ToolButton>
+            <ToolButton title="Edit/Modify ROI" mode="modify">
+              <FormatShapesRounded />
+            </ToolButton>
+            <ToolButton title="Measure Distance" mode="measureDistance">
+              <StraightenRounded />
+            </ToolButton>
           </Grid>
 
           <Divider />
