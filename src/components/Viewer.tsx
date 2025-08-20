@@ -2,17 +2,16 @@ import DeckGL from "deck.gl";
 import { OrthographicView } from "deck.gl";
 import { useAtomValue, useSetAtom } from "jotai"; // NEW: import useSetAtom
 import * as React from "react";
-import { useViewState, usePixelSize, useWorldPixelSizes } from "../hooks";
+import { useViewState, useWorldPixelSizes, useLoadRois } from "../hooks";
 import { layerAtoms } from "../state";
 import { fitImageToViewport, isGridLayerProps, isInterleaved, resolveLoaderFromLayerProps } from "../utils";
 
 // NEW: Import everything we need for the ROI layer
-import { EditableGeoJsonLayer, MeasureDistanceMode, } from '@deck.gl-community/editable-layers';
-// import type { EditAction } from '@deck.gl-community/editable-layers';
+import { EditableGeoJsonLayer, } from '@deck.gl-community/editable-layers';
 import { ViewMode } from '@deck.gl-community/editable-layers'; // Default mode
 import { IconLayer, TextLayer, LineLayer } from '@deck.gl/layers';
 import { editModeAtom, modeMap, roiCollectionAtom, updateRoiAtom, selectedRoiIndexAtom, deleteSelectedRoiAtom, } from '../roi-state';
-import type { Feature, Geometry, FeatureCollection, LineString, Position } from 'geojson';
+import type { Feature, Geometry, Position } from 'geojson';
 import type { DeckGLRef, OrthographicViewState } from "deck.gl";
 import type { VizarrLayer } from "../state";
 import { COORDINATE_SYSTEM } from '@deck.gl/core'
@@ -72,9 +71,10 @@ export default function Viewer() {
   const isTextVisible = useAtomValue(isTextVisibleAtom);
   const isRoiVisible = useAtomValue(isRoiVisibleAtom);
 
+  
   // Get the existing image layers from state.ts
   const imageLayers = useAtomValue(layerAtoms);
-
+  
   // Get all the state and setters needed for the ROI layer from roi-state.ts
   const editMode = useAtomValue(editModeAtom);
   const roiCollection = useAtomValue(roiCollectionAtom);
@@ -82,13 +82,16 @@ export default function Viewer() {
   const selectedIndex = useAtomValue(selectedRoiIndexAtom);
   const setSelectedIndex = useSetAtom(selectedRoiIndexAtom);
   const deleteRoi = useSetAtom(deleteSelectedRoiAtom);
-
+  
   // Measurment
   const worldPixelSizes = useWorldPixelSizes();
   const [tentativeCoords, setTentativeCoords] = React.useState<Position[]>([]);
   const [liveMeasurement, setLiveMeasurement] = React.useState<{ text: string, position: Position } | null>(null);
   const [pointerPosition, setPointerPosition] = React.useState<Position | null>(null);
-
+  
+  // using the hook for saving to django
+  useLoadRois();
+  
   // Define a callback function to control the cursor
   const getCursor = React.useCallback((state: { isDragging: boolean; isHovering: boolean; }) => {
     // If we're in 'view' mode, we are responsible for the hand cursor.

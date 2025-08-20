@@ -31,8 +31,13 @@ const useStyles = makeStyles({
     flexDirection: "column",
   },
   toolbar: {
-    padding: "2px 0",
+    padding: "2px 4px",
+    backgroundColor: "rgba(0, 0, 0, 0.59)",
+    borderRadius: "4px",
   },
+  visibility: {
+    padding: "2px 4px",
+  },  
 });
 
 function Menu(props: { open?: boolean }) {
@@ -94,8 +99,9 @@ function Menu(props: { open?: boolean }) {
             </ToolButton>
           </Grid>
 
+
+          <Grid container direction="row" className={classes.visibility}> 
           {/* Label Visibility Toggle */}
-          <Grid container item style={{ padding: '0 8px', alignItems: 'center' }}>
             <FormControlLabel
               control={
                 <Switch
@@ -107,10 +113,8 @@ function Menu(props: { open?: boolean }) {
               }
               label={<Typography style={{ fontSize: '0.9rem', color: '#fff' }}>Labels</Typography>}
             />
-          </Grid>
 
           {/* Roi Visibility Toggle */}
-          <Grid container item style={{ padding: '0 8px', alignItems: 'center' }}>
             <FormControlLabel
               control={
                 <Switch

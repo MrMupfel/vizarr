@@ -1,7 +1,9 @@
-import { type PrimitiveAtom, useAtom, useAtomValue } from "jotai";
+import { type PrimitiveAtom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import * as React from "react";
+import { useEffect } from "react";
 import type { LayerState, SourceData, ViewState } from "./state";
 import { sourceInfoAtom, viewStateAtom } from "./state";
+import { roiCollectionAtom  } from "./roi-state";
 
 import * as utils from "./utils";
 
@@ -130,4 +132,37 @@ export function useWorldPixelSizes() {
   }
 
   return { x: nmPerPixelX, y: nmPerPixelY };
+}
+
+/**
+ * A custom hook to fetch ROI data from the server when the app loads.
+ */
+export function useLoadRois() {
+  const setRoiCollection = useSetAtom(roiCollectionAtom);
+
+  useEffect(() => {
+    fetch('/api/rois/')
+      .then(response => {
+        if (!response.ok) {
+          // If the server returns an error, we can check if it's a 404 (no ROIs saved yet)
+          // and handle it gracefully instead of showing an error.
+          if (response.status === 404) {
+            console.log('No existing ROIs found on the server.');
+            return null; // Return null to skip the next .then()
+          }
+          throw new Error('Failed to load ROIs');
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data) {
+          // Update our global state with the data from the server
+          setRoiCollection(data);
+          console.log('ROIs loaded successfully!');
+        }
+      })
+      .catch(error => {
+        console.error('Error loading ROIs:', error);
+      });
+  }, [setRoiCollection]); // Dependency array ensures this runs only once
 }

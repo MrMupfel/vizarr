@@ -1,4 +1,5 @@
-import { atom } from 'jotai';
+import { atom, type Getter } from 'jotai';
+import debounce from 'just-debounce-it';
 // Import the full suite of types we need from GeoJSON
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import {
@@ -8,6 +9,7 @@ import {
   DrawRectangleMode,
   ModifyMode,
 } from '@deck.gl-community/editable-layers';
+import type { junit } from 'node:test/reporters';
 
 // Defines the names of the drawing modes we'll support.
 export type EditMode = 'view' | 'drawPolygon' | 'drawRectangle' | 'modify' | 'measureDistance';
@@ -48,12 +50,45 @@ export const roiCollectionAtom = atom<FeatureCollection<Geometry, { [key: string
   features: [],
 });
 
+
+// debounced saving
+const saveFunction = (get: Getter) => {
+  const dataToSave = get(roiCollectionAtom);
+  console.log('Data send:', dataToSave);
+
+  //saving logic
+  fetch('/api/rois/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(dataToSave),
+  })
+    .then(response => {
+      if (!response.ok) {
+        console.error('Failed to save ROIs', response.statusText);
+      } else {
+        console.log('ROIs saved successfully!');
+      }
+    })
+    .catch(error => {
+      console.error('Network error while saving ROIs:', error);
+    });
+};
+const debouncedSave = debounce(saveFunction, 1000);
+
+const debouncedSaveRoisAtom = atom(
+  null, // Write-only
+  (get, set) => {
+    debouncedSave(get);
+  }
+);
+
+
 // A write-only atom that receives the entire "edit action" from the layer.
 export const updateRoiAtom = atom(
   null, // This atom is write-only
   (get, set, action: EditAction<FeatureCollection<Geometry, { [key: string]: any }>>) => {
-    // The type for action.updatedData is FeatureCollection.
-    // We cast it to our more specific type to satisfy TypeScript.
     const updatedData = action.updatedData as FeatureCollection<Geometry, { [key: string]: any }>;
 
     // When a new feature is added, ask the user for a label.
@@ -69,37 +104,93 @@ export const updateRoiAtom = atom(
     }
 
     set(roiCollectionAtom, updatedData);
-    // This is the data that should be saved to your Django backend eventually
-    console.log('ROI data updated:', updatedData);
+    set(debouncedSaveRoisAtom);
   }
 );
 
-// write-only atom for deleting the currently selected ROI.
+// // write-only atom for deleting the currently selected ROI.
+// export const deleteSelectedRoiAtom = atom(
+//   null, // This atom is write-only
+//   (get, set) => {
+//     const selectedIndex = get(selectedRoiIndexAtom);
+
+//     // Only proceed if there is a selected ROI
+//     if (selectedIndex !== null) {
+//       const currentCollection = get(roiCollectionAtom);
+
+//       // Create a new features array excluding the one at selectedIndex
+//       const updatedFeatures = currentCollection.features.filter(
+//         (_, index) => index !== selectedIndex
+//       );
+
+//       // Update the main ROI collection with the new features
+//       set(roiCollectionAtom, {
+//         ...currentCollection,
+//         features: updatedFeatures,
+//       });
+
+//       // Important: Reset the selection since the ROI is now gone
+//       set(selectedRoiIndexAtom, null);
+
+//       console.log(`ROI at index ${selectedIndex} deleted.`);
+//     }
+//   }
+// );
+
 export const deleteSelectedRoiAtom = atom(
-  null, // This atom is write-only
-  (get, set) => {
+  null, // Write-only
+  async (get, set) => { 
     const selectedIndex = get(selectedRoiIndexAtom);
-    
-    // Only proceed if there is a selected ROI
-    if (selectedIndex !== null) {
-      const currentCollection = get(roiCollectionAtom);
-      
-      // Create a new features array excluding the one at selectedIndex
-      const updatedFeatures = currentCollection.features.filter(
-        (_, index) => index !== selectedIndex
-      );
+    const currentCollection = get(roiCollectionAtom);
 
-      // Update the main ROI collection with the new features
-      set(roiCollectionAtom, {
-        ...currentCollection,
-        features: updatedFeatures,
-      });
-      
-      // Important: Reset the selection since the ROI is now gone
-      set(selectedRoiIndexAtom, null);
-
-      console.log(`ROI at index ${selectedIndex} deleted.`);
+    // 1. Check if an ROI is actually selected
+    if (selectedIndex === null) {
+      console.log('No ROI selected to delete.');
+      return;
     }
+
+    const featureToDelete = currentCollection.features[selectedIndex];
+    const roiId = featureToDelete?.properties?.id;
+
+    // 2. Check if the ROI has a database ID. (A newly drawn ROI might not have one yet).
+    if (!roiId) {
+      console.error("This ROI doesn't have a database ID and can't be deleted from the server.");
+      // For now, we'll just remove it from the frontend if it's a new, unsaved shape.
+      // A more robust solution might prevent deleting unsaved shapes.
+    } else {
+      // 3. This is an existing ROI with an ID, so we call the backend
+      try {
+        const response = await fetch(`/api/rois/${roiId}/`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          // If the server failed to delete it, throw an error
+          throw new Error('Failed to delete ROI on server.');
+        }
+
+        console.log(`ROI with ID ${roiId} deleted from server.`);
+
+      } catch (error) {
+        console.error(error);
+        // If the API call fails, we stop here and don't update the UI.
+        return;
+      }
+    }
+
+    // 4. If the API call was successful (or if it was an unsaved shape),
+    //    update the frontend state.
+    const updatedFeatures = currentCollection.features.filter(
+      (_, index) => index !== selectedIndex
+    );
+
+    set(roiCollectionAtom, {
+      ...currentCollection,
+      features: updatedFeatures,
+    });
+    
+    // Reset the selection
+    set(selectedRoiIndexAtom, null);
   }
 );
 

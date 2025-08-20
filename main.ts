@@ -38,14 +38,12 @@ async function main() {
     config[key] = value;
   }
 
-  // =================================================================
-  // DEV
+  // DEV ================================================================= DEV
   // If the source is a relative path (for the proxy), make it absolute.
   if (config.source && typeof config.source === 'string' && config.source.startsWith('/')) {
     config.source = `${window.location.origin}${config.source}`;
   }
-  // DEV
-  // =================================================================
+  // DEV ================================================================= DEV
 
   // Make sure the source URL is decoded.
   viewer.addImage(config);
