@@ -71,10 +71,10 @@ export default function Viewer() {
   const isTextVisible = useAtomValue(isTextVisibleAtom);
   const isRoiVisible = useAtomValue(isRoiVisibleAtom);
 
-  
+
   // Get the existing image layers from state.ts
   const imageLayers = useAtomValue(layerAtoms);
-  
+
   // Get all the state and setters needed for the ROI layer from roi-state.ts
   const editMode = useAtomValue(editModeAtom);
   const roiCollection = useAtomValue(roiCollectionAtom);
@@ -82,16 +82,16 @@ export default function Viewer() {
   const selectedIndex = useAtomValue(selectedRoiIndexAtom);
   const setSelectedIndex = useSetAtom(selectedRoiIndexAtom);
   const deleteRoi = useSetAtom(deleteSelectedRoiAtom);
-  
+
   // Measurment
   const worldPixelSizes = useWorldPixelSizes();
   const [tentativeCoords, setTentativeCoords] = React.useState<Position[]>([]);
   const [liveMeasurement, setLiveMeasurement] = React.useState<{ text: string, position: Position } | null>(null);
   const [pointerPosition, setPointerPosition] = React.useState<Position | null>(null);
-  
+
   // using the hook for saving to django
   useLoadRois();
-  
+
   // Define a callback function to control the cursor
   const getCursor = React.useCallback((state: { isDragging: boolean; isHovering: boolean; }) => {
     // If we're in 'view' mode, we are responsible for the hand cursor.
@@ -104,6 +104,38 @@ export default function Viewer() {
       return 'default';
     }
   }, [editMode]);
+
+
+  // Tooltip for displaying author of roi
+  const getTooltip = (info: any) => {
+    // Destructure the object from the info parameter
+    const { object } = info;
+
+    // The rest of the function remains exactly the same
+    if (!object || !object.properties) {
+      return null;
+    }
+
+    const { author } = object.properties;
+
+    if (!author) {
+      return null;
+    }
+
+    let content = '';
+    if (author) {
+      content += `<em>Author:</em> ${author}`;
+    }
+
+    return {
+      html: `<div style="background-color: #333; color: white; padding: 8px; border-radius: 4px; font-family: sans-serif; font-size: 12px; max-width: 400px;">${content}</div>`,
+      style: {
+        backgroundColor: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+      }
+    };
+  };
 
 
   React.useEffect(() => {
@@ -224,18 +256,13 @@ export default function Viewer() {
       mode: modeClass,
       selectedFeatureIndexes: selectedIndex !== null ? [selectedIndex] : [],
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-
-      // HYBRID APPROACH: Use modeConfig ONLY to disable the default tooltip
-      // modeConfig: {
-      //   // Return null to prevent the default tooltip from rendering
-      //   formatTooltip: () => null,
-      // },
+      pickable: true,
 
       _subLayerProps: {
         guides: {
           // These styles apply to the grey preview shape while drawing
-          getFillColor: [0, 0, 0, 0],  
-          getLineColor: [255, 0, 0, 150],  
+          getFillColor: [0, 0, 0, 0],
+          getLineColor: [255, 0, 0, 150],
         }
       },
 
@@ -326,6 +353,7 @@ export default function Viewer() {
       ref={deckRef}
       layers={allLayers} // Pass the combined array to DeckGL
       getCursor={getCursor}
+      getTooltip={getTooltip}
       viewState={viewState && { ortho: viewState }}
       onViewStateChange={(e: { viewState: OrthographicViewState }) =>
         // @ts-expect-error - deck doesn't know this should be ok

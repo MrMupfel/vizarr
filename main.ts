@@ -1,6 +1,18 @@
 import debounce from "just-debounce-it";
 import * as vizarr from "./src/index";
 
+// --- ADD THIS BLOCK FOR DEVELOPMENT ---
+// This simulates the data Django will provide in production.
+// It connects your locally served dataset to its database entry.
+const DEV_IMAGE_ID = 2; // for test1.ome.zarr ID is 2
+(window as any).vizarrApi = {
+  imageId: DEV_IMAGE_ID,
+  // The API URL now points to the correct, specific endpoint for this image
+  roisUrl: `/viewer/api/images/${DEV_IMAGE_ID}/rois/`,
+  userName: 'dev-user', // A placeholder username
+};
+// ------------------------------------
+
 async function main() {
   console.log(`vizarr v${vizarr.version}: https://github.com/hms-dbmi/vizarr`);
   // biome-ignore lint/style/noNonNullAssertion: We know the element exists

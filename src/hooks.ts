@@ -141,7 +141,7 @@ export function useLoadRois() {
   const setRoiCollection = useSetAtom(roiCollectionAtom);
 
   useEffect(() => {
-    fetch('/api/rois/')
+    fetch((window as any).vizarrApi.roisUrl)
       .then(response => {
         if (!response.ok) {
           // If the server returns an error, we can check if it's a 404 (no ROIs saved yet)
