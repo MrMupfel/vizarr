@@ -10,6 +10,7 @@ import {
   ModifyMode,
 } from '@deck.gl-community/editable-layers';
 import type { junit } from 'node:test/reporters';
+import { getCsrfToken } from './utils';
 
 // Defines the names of the drawing modes we'll support.
 export type EditMode = 'view' | 'drawPolygon' | 'drawRectangle' | 'modify' | 'measureDistance';
@@ -54,6 +55,7 @@ export const roiCollectionAtom = atom<FeatureCollection<Geometry, { [key: string
 // debounced saving
 const saveFunction = (get: Getter, set: Setter) => {
   const dataToSave = get(roiCollectionAtom);
+  const csrfToken = getCsrfToken();
   console.log('Data send:', dataToSave);
 
   //saving logic
@@ -62,6 +64,7 @@ const saveFunction = (get: Getter, set: Setter) => {
     headers: {
       'Content-Type': 'application/json',
       // HERE WILL BE DRAGONS (and also CSRF tokens)
+      'X-CSRFToken': csrfToken || '',
     },
     body: JSON.stringify(dataToSave),
   })
@@ -162,6 +165,7 @@ export const deleteSelectedRoiAtom = atom(
 
     const featureToDelete = currentCollection.features[selectedIndex];
     const roiId = featureToDelete?.properties?.id;
+    const csrfToken = getCsrfToken();
 
     // 2. Check if the ROI has a database ID. (A newly drawn ROI might not have one yet).
     if (!roiId) {
@@ -175,6 +179,9 @@ export const deleteSelectedRoiAtom = atom(
       try {
         const response = await fetch(deleteUrl, {
           method: 'DELETE',
+          headers: {
+            'X-CSRFToken': csrfToken || '',
+          },
         });
 
         if (!response.ok) {

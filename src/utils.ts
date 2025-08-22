@@ -591,3 +591,9 @@ export function zip<T extends unknown[]>(...arrays: { [K in keyof T]: ReadonlyAr
   }
   return result;
 }
+
+// A helper function to get the CSRF token from the browser's cookies
+export function getCsrfToken(): string | null {
+  const csrfCookie = document.cookie.match(/csrftoken=([^;]+)/);
+  return csrfCookie ? csrfCookie[1] : null;
+}

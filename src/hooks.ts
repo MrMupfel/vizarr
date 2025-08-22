@@ -66,7 +66,7 @@ export function usePixelSize() {
   if (xIndex === -1) return null;
 
   const basePixelSizeX = scaleTransform.scale[xIndex];
-  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'pixels';
+  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'angstrom';
 
   // 1. NORMALIZE the base size to nanometers.
   let baseSizeInNm = basePixelSizeX;
@@ -115,7 +115,7 @@ export function useWorldPixelSizes() {
   if (xIndex === -1 || yIndex === -1) return null;
 
   const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
-  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'pixels';
+  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'angstrom';
   
   const [basePixelSizeX, basePixelSizeY] = [scaleTransform.scale[xIndex], scaleTransform.scale[yIndex]];
 
@@ -126,9 +126,8 @@ export function useWorldPixelSizes() {
     nmPerPixelX /= 10;
     nmPerPixelY /= 10;
   } else if (inputUnit === 'micrometer' || inputUnit === 'micron') {
-    // This is where we correct the previous unit error based on your data.
-    // If your data's 'unit' is 'micrometer' but the scale is already in nm, this is correct.
-    // If your data is 800 angstrom, this block is not entered, which is also correct.
+    nmPerPixelX *= 1000;
+    nmPerPixelY *= 1000;
   }
 
   return { x: nmPerPixelX, y: nmPerPixelY };
