@@ -1,96 +1,83 @@
-import debounce from "just-debounce-it";
+import debounce from 'just-debounce-it';
 import * as vizarr from "./src/index";
 
-// --- ADD THIS BLOCK FOR DEVELOPMENT ---
-// This simulates the data Django will provide in production.
-// It connects your locally served dataset to its database entry.
-// const DEV_IMAGE_ID = 2; // for test1.ome.zarr ID is 2
-// (window as any).vizarrApi = {
-//   imageId: DEV_IMAGE_ID,
-//   // The API URL now points to the correct, specific endpoint for this image
-//   roisUrl: `/viewer/api/images/${DEV_IMAGE_ID}/rois/`,
-//   userName: 'dev-user', // A placeholder username
-// };
-// ------------------------------------
+// this might be a cleaner alternative in the future
+//import { createViewer, type ImageLayerConfig, type ViewState } from './src/index';
 
-function initializeApi() {
-  const root = document.getElementById('root');
+// This listener waits for the HTML page to be fully loaded before running any code - fixes the error I observerd before when integrating into django.
+document.addEventListener('DOMContentLoaded', () => {
+  async function main() {
+    // Since this runs after DOMContentLoaded, we know the #root element exists.
+    const root = document.querySelector<HTMLElement>("#root")!;
 
-  // Check if data attributes are present (i.e., we are in the Django environment).
-  if (root && root.dataset.imageId) {
-    console.log("Running in PRODUCTION mode (from Django template)");
-    const imageId = parseInt(root.dataset.imageId, 10);
-    (window as any).vizarrApi = {
-      imageId: imageId,
-      roisUrl: root.dataset.roisUrl || '',
-      userName: root.dataset.userName || '',
-    };
-  } else {
-    // Fallback for Vite's development environment.
-    console.log("Running in DEVELOPMENT mode (with hardcoded values)");
-    const DEV_IMAGE_ID = 2; // <-- Change this to the ID you want to test with
-    (window as any).vizarrApi = {
-      imageId: DEV_IMAGE_ID,
-      roisUrl: `/viewer/api/images/${DEV_IMAGE_ID}/rois/`,
-      userName: 'dev-user',
-    };
-  }
-}
-initializeApi();
+    // Check for data attributes passed from the Django template.
+    if (root.dataset.imageId) {
+      console.log("Running in PRODUCTION mode (from Django template)");
+      (window as any).vizarrApi = {
+        imageId: parseInt(root.dataset.imageId, 10),
+        roisUrl: root.dataset.roisUrl || '',
+        userName: root.dataset.userName || '',
+      };
+    } else {
+      // Fallback for local development if no Django data is found.
+      console.warn("Running in DEVELOPMENT mode: No Django data attributes found.");
+      (window as any).vizarrApi = {
+        imageId: 2, // Example ID for local dev
+        roisUrl: `/viewer/api/images/2/rois/`,
+        userName: 'dev-user',
+      };
+    }
 
-async function main() {
-  console.log(`vizarr v${vizarr.version}: https://github.com/hms-dbmi/vizarr`);
-  // biome-ignore lint/style/noNonNullAssertion: We know the element exists
-  const viewer = await vizarr.createViewer(document.querySelector("#root")!);
-  const url = new URL(window.location.href);
+    const viewer = await vizarr.createViewer(root);
+    console.log(`vizarr v${vizarr.version}: https://github.com/hms-dbmi/vizarr`);
 
-  if (!url.searchParams.has("source")) {
-    return;
-  }
+    const url = new URL(window.location.href);
 
-  // see if we have initial viewState
-  const viewStateString = url.searchParams.get("viewState");
-  if (viewStateString) {
-    const viewState = JSON.parse(viewStateString);
-    viewer.setViewState(viewState);
-  }
+    if (!url.searchParams.has("source")) {
+      return;
+    }
+    
+    // Restore viewState if it exists in the URL.
+    const viewStateString = url.searchParams.get("viewState");
+    if (viewStateString) {
+      const viewState = JSON.parse(viewStateString);
+      viewer.setViewState(viewState);
+    }
 
-  // Add event listener to sync viewState as query param.
-  // Debounce to limit how quickly we are pushing to browser history
-  viewer.on(
-    "viewStateChange",
-    debounce((update: vizarr.ViewState) => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("viewState", JSON.stringify(update));
-      window.history.pushState({}, "", decodeURIComponent(url.href));
-    }, 200),
-  );
+    // Add event listener to sync viewState as a query parameter.
+    viewer.on(
+      "viewStateChange",
+      debounce((update: vizarr.ViewState) => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("viewState", JSON.stringify(update));
+        window.history.pushState({}, "", decodeURIComponent(url.href));
+      }, 200),
+    );
 
-  // parse image config
-  // @ts-expect-error - TODO: validate config
-  const config: vizarr.ImageLayerConfig = {};
-
-  for (const [key, value] of url.searchParams) {
+    // Parse image config from URL search parameters.
     // @ts-expect-error - TODO: validate config
-    config[key] = value;
+    const config: vizarr.ImageLayerConfig = {};
+
+    for (const [key, value] of url.searchParams) {
+      // @ts-expect-error - TODO: validate config
+      config[key] = value;
+    }
+
+    // If the source is a relative path (for the proxy), make it absolute.
+    if (config.source && typeof config.source === 'string' && config.source.startsWith('/')) {
+      config.source = `${window.location.origin}${config.source}`;
+    }
+
+    viewer.addImage(config);
+
+    // Update browser history.
+    const newLocation = decodeURIComponent(url.href);
+
+    if (window.location.href !== newLocation) {
+      window.history.pushState(null, "", newLocation);
+    }
   }
 
-  // DEV ================================================================= DEV
-  // If the source is a relative path (for the proxy), make it absolute.
-  if (config.source && typeof config.source === 'string' && config.source.startsWith('/')) {
-    config.source = `${window.location.origin}${config.source}`;
-  }
-  // DEV ================================================================= DEV
-
-  // Make sure the source URL is decoded.
-  viewer.addImage(config);
-
-  const newLocation = decodeURIComponent(url.href);
-
-  // Only update history if the new loacation is different from the current
-  if (window.location.href !== newLocation) {
-    window.history.pushState(null, "", newLocation);
-  }
-}
-
-main();
+  // This is the only place main() should be called.
+  main();
+});
