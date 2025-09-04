@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Fallback for local development if no Django data is found.
       console.warn("Running in DEVELOPMENT mode: No Django data attributes found.");
       (window as any).vizarrApi = {
-        imageId: 2, // Example ID for local dev
-        roisUrl: `/viewer/api/images/2/rois/`,
+        imageId: 36, // Example ID for local dev
+        roisUrl: `/viewer/api/images/36/rois/`,
         userName: 'dev-user',
       };
     }
