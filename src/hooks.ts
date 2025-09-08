@@ -68,6 +68,7 @@ export function usePixelSize() {
   const basePixelSizeX = scaleTransform.scale[xIndex];
   const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'angstrom';
 
+  
   // 1. NORMALIZE the base size to nanometers.
   let baseSizeInNm = basePixelSizeX;
   if (inputUnit === 'angstrom') {
@@ -75,7 +76,8 @@ export function usePixelSize() {
   } else if (inputUnit === 'micrometer' || inputUnit === 'micron') {
     baseSizeInNm = basePixelSizeX * 1000;
   }
-
+  
+  
   // The current size of a screen pixel, now in nanometers.
   return baseSizeInNm * Math.pow(2, -viewState.zoom);
 }
@@ -121,6 +123,8 @@ export function useWorldPixelSizes() {
 
   let nmPerPixelX = basePixelSizeX;
   let nmPerPixelY = basePixelSizeY;
+
+  
 
   if (inputUnit === 'angstrom') {
     nmPerPixelX /= 10;

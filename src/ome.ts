@@ -253,14 +253,16 @@ export async function loadOmeMultiscales(
   const axes = utils.getNgffAxes(attrs.multiscales);
   const axis_labels = utils.getNgffAxisLabels(axes);
   const tileSize = utils.guessTileSize(data[0]);
+
   let meta: Meta;
   if (utils.isOmeMultiscales(attrs)) {
     meta = parseOmeroMeta(attrs.omero, axes);
   } else {
-    const lowres = new ZarrPixelSource(data[data.length - 1], { labels: axis_labels, tileSize });
+    const lowres = new ZarrPixelSource(data[data.length - 1], { labels: axis_labels, tileSize, multiscales: attrs.multiscales });
     meta = await defaultMeta(lowres, axis_labels);
   }
-  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize }));
+  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize, multiscales: attrs.multiscales }));
+
   const labels = await resolveOmeLabelsFromMultiscales(grp);
   return {
     loader: loader,
