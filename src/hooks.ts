@@ -3,7 +3,7 @@ import * as React from "react";
 import { useEffect } from "react";
 import type { LayerState, SourceData, ViewState } from "./state";
 import { sourceInfoAtom, viewStateAtom } from "./state";
-import { roiCollectionAtom  } from "./roi-state";
+import { roiCollectionAtom } from "./roi-state";
 
 import * as utils from "./utils";
 
@@ -37,105 +37,100 @@ export function useViewState() {
  * @returns The current size of a single screen pixel in nanometers, or null if not available.
  */
 export function usePixelSize() {
-  const sources = useAtomValue(sourceInfoAtom);
   const viewState = useAtomValue(viewStateAtom);
 
-  if (!viewState || sources.length === 0) {
+  if (!viewState) {
     return null;
   }
 
-  const sourceData = sources[0];
-  const baseLoader = sourceData.loader[0];
-  if (!baseLoader.omeMeta) return null;
-
-  const multiscale = baseLoader.omeMeta[0];
-  const baseResolution = multiscale.datasets[0];
-  const scaleTransform = baseResolution.coordinateTransformations?.find(
-    (t) => t.type === 'scale'
-  );
-
-  if (scaleTransform?.type !== 'scale') return null;
-
-  const { axes } = multiscale;
-  const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
-    typeof axis === 'string' ? { name: axis } : axis
-  );
-  const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
-  const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
-
-  if (xIndex === -1) return null;
-
-  const basePixelSizeX = scaleTransform.scale[xIndex];
-  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'angstrom';
-
-  
-  // 1. NORMALIZE the base size to nanometers.
-  let baseSizeInNm = basePixelSizeX;
-  if (inputUnit === 'angstrom') {
-    baseSizeInNm = basePixelSizeX / 10;
-  } else if (inputUnit === 'micrometer' || inputUnit === 'micron') {
-    baseSizeInNm = basePixelSizeX * 1000;
-  }
-  
-  
-  // The current size of a screen pixel, now in nanometers.
-  return baseSizeInNm * Math.pow(2, -viewState.zoom);
+  // In Deck.gl's OrthographicView, the size of a screen pixel in world units
+  // is determined solely by the zoom level. At zoom 0, 1 screen pixel = 1 world unit (nm).
+  // This formula correctly calculates the size for any zoom level.
+  return Math.pow(2, -viewState.zoom);
 }
 
-// src/hooks.tsx
 
-/**
- * A hook that calculates the physical size of a single highest-resolution pixel
- * in both X and Y dimensions, returning the result in nanometers.
- */
-export function useWorldPixelSizes() {
-  const sources = useAtomValue(sourceInfoAtom);
+// /**
+//  * A custom hook that calculates the physical size of a screen pixel in nanometers.
+//  * It uses the image metadata and the current viewport zoom level.
+//  * @returns The current size of a single screen pixel in nanometers, or null if not available.
+//  */
+// export function usePixelSize() {
+//   const sources = useAtomValue(sourceInfoAtom);
+//   const viewState = useAtomValue(viewStateAtom);
 
-  if (sources.length === 0) {
-    return null;
-  }
+//   if (!viewState || sources.length === 0) {
+//     return null;
+//   }
 
-  const sourceData = sources[0];
-  const baseLoader = sourceData.loader[0];
-  if (!baseLoader.omeMeta) return null;
+//   const sourceData = sources[0];
+//   const baseLoader = sourceData.loader[0];
+//   if (!baseLoader.omeMeta) return null;
 
-  const multiscale = baseLoader.omeMeta[0];
-  const baseResolution = multiscale.datasets[0];
-  const scaleTransform = baseResolution.coordinateTransformations?.find(
-    (t) => t.type === 'scale'
-  );
+//   const multiscale = baseLoader.omeMeta[0];
+//   const baseResolution = multiscale.datasets[0];
+//   const scaleTransform = baseResolution.coordinateTransformations?.find(
+//     (t) => t.type === 'scale'
+//   );
 
-  if (scaleTransform?.type !== 'scale') return null;
+//   if (scaleTransform?.type !== 'scale') return null;
 
-  const { axes } = multiscale;
-  const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
-    typeof axis === 'string' ? { name: axis } : axis
-  );
-  const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
-  const yIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'y');
-  
-  if (xIndex === -1 || yIndex === -1) return null;
+//   const { axes } = multiscale;
+//   const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
+//     typeof axis === 'string' ? { name: axis } : axis
+//   );
+//   const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
 
-  const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
-  const inputUnit = spaceAxis?.unit.toLowerCase() ?? 'angstrom';
-  
-  const [basePixelSizeX, basePixelSizeY] = [scaleTransform.scale[xIndex], scaleTransform.scale[yIndex]];
+//   if (xIndex === -1) return null;
 
-  let nmPerPixelX = basePixelSizeX;
-  let nmPerPixelY = basePixelSizeY;
+//   // The scale is now pre-normalized to nanometers by the data loader in ome.ts.
+//   // We can just use the value directly without any further conversion.
+//   const baseSizeInNm = scaleTransform.scale[xIndex];
 
-  
+//   // The current size of a screen pixel, now in nanometers.
+//   return baseSizeInNm * Math.pow(2, -viewState.zoom);
+// }
 
-  if (inputUnit === 'angstrom') {
-    nmPerPixelX /= 10;
-    nmPerPixelY /= 10;
-  } else if (inputUnit === 'micrometer' || inputUnit === 'micron') {
-    nmPerPixelX *= 1000;
-    nmPerPixelY *= 1000;
-  }
 
-  return { x: nmPerPixelX, y: nmPerPixelY };
-}
+// /**
+//  * A hook that calculates the physical size of a single highest-resolution pixel
+//  * in both X and Y dimensions, returning the result in nanometers.
+//  */
+// export function useWorldPixelSizes() {
+//   const sources = useAtomValue(sourceInfoAtom);
+
+//   if (sources.length === 0) {
+//     return null;
+//   }
+
+//   const sourceData = sources[0];
+//   const baseLoader = sourceData.loader[0];
+//   if (!baseLoader.omeMeta) return null;
+
+//   const multiscale = baseLoader.omeMeta[0];
+//   const baseResolution = multiscale.datasets[0];
+//   const scaleTransform = baseResolution.coordinateTransformations?.find(
+//     (t) => t.type === 'scale'
+//   );
+
+//   if (scaleTransform?.type !== 'scale') return null;
+
+//   const { axes } = multiscale;
+//   const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
+//     typeof axis === 'string' ? { name: axis } : axis
+//   );
+//   const xIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'x');
+//   const yIndex = normalizedAxes.findIndex((axis) => axis.name.toLowerCase() === 'y');
+
+//   if (xIndex === -1 || yIndex === -1) return null;
+
+//   // The scale is now pre-normalized to nanometers by the data loader.
+//   // We can just use the values directly.
+//   const nmPerPixelX = scaleTransform.scale[xIndex];
+//   const nmPerPixelY = scaleTransform.scale[yIndex];
+
+//   return { x: Math.abs(nmPerPixelX), y: Math.abs(nmPerPixelY) };
+// }
 
 /**
  * A custom hook to fetch ROI data from the server when the app loads.
@@ -169,3 +164,5 @@ export function useLoadRois() {
       });
   }, [setRoiCollection]); // Dependency array ensures this runs only once
 }
+
+

@@ -34,7 +34,10 @@ export default function ScaleBarInfo() {
 
         // SELECT the best display unit and text label.
         let display_text = '';
-        if (niceLengthInNm < 1000) {
+        if (niceLengthInNm < 1) {
+            display_text = `${(niceLengthInNm).toFixed(1)} nm`;
+        }
+        else if (niceLengthInNm < 1000) {
             display_text = `${niceLengthInNm.toFixed(0)} nm`;
         } else {
             const lengthInMicrons = niceLengthInNm / 1000;

@@ -2,7 +2,7 @@ import DeckGL from "deck.gl";
 import { OrthographicView } from "deck.gl";
 import { useAtomValue, useSetAtom } from "jotai"; // NEW: import useSetAtom
 import * as React from "react";
-import { useViewState, useWorldPixelSizes, useLoadRois } from "../hooks";
+import { useViewState, useLoadRois } from "../hooks";
 import { layerAtoms } from "../state";
 import { fitImageToViewport, isGridLayerProps, isInterleaved, resolveLoaderFromLayerProps } from "../utils";
 
@@ -24,17 +24,15 @@ const DELETE_ICON_URL = `data:image/svg+xml;base64,${btoa(DELETE_ICON_SVG)}`;
 
 type VizarrFeature = Feature<Geometry, { [key: string]: any }>;
 
-// New helper for anisotropic distance calculation
-function getAnisotropicLength(coordinates: Position[], pixelSizes: { x: number, y: number }): number {
-  if (!pixelSizes) return 0;
+function getWorldDistance(coordinates: Position[]): number {
   let totalLength = 0;
   for (let i = 0; i < coordinates.length - 1; i++) {
     const [x1, y1] = coordinates[i];
     const [x2, y2] = coordinates[i + 1];
-    // Scale the distance of each segment by the per-axis pixel size
-    const dx_nm = (x2 - x1) * pixelSizes.x;
-    const dy_nm = (y2 - y1) * pixelSizes.y;
-    totalLength += Math.sqrt(Math.pow(dx_nm, 2) + Math.pow(dy_nm, 2));
+    // The coordinates are already in nanometers, so we just find the distance.
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    totalLength += Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
   }
   return totalLength;
 }
@@ -84,7 +82,6 @@ export default function Viewer() {
   const deleteRoi = useSetAtom(deleteSelectedRoiAtom);
 
   // Measurment
-  const worldPixelSizes = useWorldPixelSizes();
   const [tentativeCoords, setTentativeCoords] = React.useState<Position[]>([]);
   const [liveMeasurement, setLiveMeasurement] = React.useState<{ text: string, position: Position } | null>(null);
   const [pointerPosition, setPointerPosition] = React.useState<Position | null>(null);
@@ -178,11 +175,12 @@ export default function Viewer() {
 
   const liveTooltipLayer = React.useMemo(() => {
     // If we are between the first and second click and have a pointer position
-    if (tentativeCoords.length === 1 && pointerPosition && worldPixelSizes) {
+    if (tentativeCoords.length === 1 && pointerPosition) {
       // Create a temporary line to the pointer to measure its length
       const liveCoords = [tentativeCoords[0], pointerPosition];
-      const lengthInNm = getAnisotropicLength(liveCoords, worldPixelSizes);
-      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
+      const lengthInNm = getWorldDistance(liveCoords);
+
+      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(3)} nm` : `${(lengthInNm / 1000).toFixed(3)} um`;
 
       return new TextLayer({
         id: 'live-tooltip-layer-live',
@@ -198,9 +196,9 @@ export default function Viewer() {
     }
 
     // If the line is finished (2 clicks), show the final measurement
-    if (tentativeCoords.length === 2 && worldPixelSizes) {
-      const lengthInNm = getAnisotropicLength(tentativeCoords, worldPixelSizes);
-      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
+    if (tentativeCoords.length === 2) {
+      const lengthInNm = getWorldDistance(tentativeCoords);
+      const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(3)} nm` : `${(lengthInNm / 1000).toFixed(3)} um`;
 
       return new TextLayer({
         id: 'live-tooltip-layer-final',
@@ -216,7 +214,7 @@ export default function Viewer() {
     }
 
     return null;
-  }, [tentativeCoords, pointerPosition, worldPixelSizes]);
+  }, [tentativeCoords, pointerPosition]);
 
 
   const roiTextLayer = React.useMemo(() => {
@@ -281,7 +279,7 @@ export default function Viewer() {
       getLineColor: (f, isSelected) => isSelected ? [255, 164, 61, 255] : [255, 0, 0, 255],
     });
 
-  }, [editMode, roiCollection, selectedIndex, setRoiUpdate, isRoiVisible, worldPixelSizes, setSelectedIndex]);
+  }, [editMode, roiCollection, selectedIndex, setRoiUpdate, isRoiVisible, setSelectedIndex]);
 
 
   // NEW: Create the IconLayer for the delete button.
@@ -367,6 +365,7 @@ export default function Viewer() {
       onClick={(info) => {
         // Only run this logic if we are in measure mode and the click was not on an existing ROI
         if (editMode === 'measureDistance' && !info.object) {
+
           const newPoint = info.coordinate as Position;
 
           // If a line is already drawn (2 points), this click starts a new one.
@@ -387,12 +386,10 @@ export default function Viewer() {
           if (tentativeCoords.length === 1) {
             const newCoords = [tentativeCoords[0], newPoint];
             setTentativeCoords(newCoords);
+            const lengthInNm = getWorldDistance(newCoords);
+            const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(3)} nm` : `${(lengthInNm / 1000).toFixed(3)} um`;
+            setLiveMeasurement({ text, position: newPoint });
 
-            if (worldPixelSizes) {
-              const lengthInNm = getAnisotropicLength(newCoords, worldPixelSizes);
-              const text = lengthInNm < 1000 ? `${lengthInNm.toFixed(1)} nm` : `${(lengthInNm / 1000).toFixed(2)} um`;
-              setLiveMeasurement({ text, position: newPoint });
-            }
           }
         }
       }}

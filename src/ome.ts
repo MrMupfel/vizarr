@@ -6,6 +6,36 @@ import { ZarrPixelSource } from "./ZarrPixelSource";
 import type { OmeColor } from "./layers/label-layer";
 import * as utils from "./utils";
 
+import { getNmConversionFactor } from "./utils";
+
+const normalizeCoordinateTransformations = (attrs: any) => {
+  // 1. Create a deep copy to avoid changing the original object.
+  const attrsCopy = JSON.parse(JSON.stringify(attrs));
+  const omeroMeta = utils.isOmeMultiscales(attrsCopy) ? attrsCopy.omero : undefined;
+
+  // 2. Get the conversion factor needed to get to nanometers.
+  const conversionFactor = getNmConversionFactor(attrsCopy.multiscales, omeroMeta);
+
+  // 3. If a conversion is needed, apply it to the scale values.
+  if (conversionFactor !== 1) {
+    for (const p of attrsCopy.multiscales) {
+      for (const d of p.datasets) {
+        if (d.coordinateTransformations) {
+          for (const t of d.coordinateTransformations) {
+            if (t.type === 'scale') {
+              // This is where 7.87 becomes 0.787
+              t.scale = t.scale.map((s: number) => s * conversionFactor);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Return the new, corrected object.
+  return attrsCopy;
+};
+
 export async function loadWell(
   config: ImageLayerConfig,
   grp: zarr.Group<zarr.Readable>,
@@ -254,14 +284,16 @@ export async function loadOmeMultiscales(
   const axis_labels = utils.getNgffAxisLabels(axes);
   const tileSize = utils.guessTileSize(data[0]);
 
+  const normalizedAttrs = normalizeCoordinateTransformations(attrs);
+
   let meta: Meta;
   if (utils.isOmeMultiscales(attrs)) {
     meta = parseOmeroMeta(attrs.omero, axes);
   } else {
-    const lowres = new ZarrPixelSource(data[data.length - 1], { labels: axis_labels, tileSize, multiscales: attrs.multiscales });
+    const lowres = new ZarrPixelSource(data[data.length - 1], { labels: axis_labels, tileSize, multiscales: normalizedAttrs.multiscales }); // NEW
     meta = await defaultMeta(lowres, axis_labels);
   }
-  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize, multiscales: attrs.multiscales }));
+  const loader = data.map((arr) => new ZarrPixelSource(arr, { labels: axis_labels, tileSize, multiscales: normalizedAttrs.multiscales })); // NEW
 
   const labels = await resolveOmeLabelsFromMultiscales(grp);
   return {
@@ -269,7 +301,7 @@ export async function loadOmeMultiscales(
     axis_labels,
     model_matrix: config.model_matrix
       ? utils.parseMatrix(config.model_matrix)
-      : utils.coordinateTransformationsToMatrix(attrs.multiscales),
+      : utils.coordinateTransformationsToMatrix(normalizedAttrs.multiscales),
     defaults: {
       selection: meta.defaultSelection,
       colormap,

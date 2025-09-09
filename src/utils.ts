@@ -248,7 +248,7 @@ export function fitImageToViewport(options: {
     zoom: Math.log2(
       Math.min(
         availableWidth / (maxX - minX), // scaleX
-        availableHeight / (maxY - minX), // scaleY
+        availableHeight / (maxY - minY), // scaleY CORRECTED: minY instead of minX
       ),
     ),
     target: [(minX + maxX) / 2, (minY + maxY) / 2],
@@ -596,4 +596,45 @@ export function zip<T extends unknown[]>(...arrays: { [K in keyof T]: ReadonlyAr
 export function getCsrfToken(): string | null {
   const csrfCookie = document.cookie.match(/csrftoken=([^;]+)/);
   return csrfCookie ? csrfCookie[1] : null;
+}
+
+
+// In utils.ts
+
+/**
+ * Determines the physical size unit from NGFF metadata and returns a
+ * factor to convert that unit to nanometers.
+ * @param {Ome.Multiscale[]} multiscales The multiscale metadata from .zattrs.
+ * @param {Ome.Omero} [omero] The omero metadata block, if available.
+ * @returns {number} A multiplication factor to convert the source unit to nanometers.
+ */
+export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome.Omero): number {
+  const axes = getNgffAxes(multiscales);
+  const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
+    typeof axis === 'string' ? { name: axis } : axis
+  );
+
+  // 1. Try to get unit from the axes directly (the best way)
+  const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
+  let inputUnit = spaceAxis?.unit?.toLowerCase();
+
+  // // 2. If not found, try from the omero block
+  // if (!inputUnit && omero?.channels?.[0]?.spatial_calibration_unit) {
+  //   inputUnit = omero.channels[0].spatial_calibration_unit.toLowerCase();
+  // }
+
+  // 3. If still not found, fallback to angstrom
+  if (!inputUnit) {
+    inputUnit = 'angstrom';
+  }
+
+  // Return the factor required to convert the input unit to nanometers
+  if (inputUnit === 'angstrom') {
+    return 0.1; // 1 Å = 0.1 nm
+  }
+  if (inputUnit === 'micrometer' || inputUnit === 'micron') {
+    return 1000; // 1 µm = 1000 nm
+  }
+
+  return 1; // Default to 1 (e.g., for nanometer)
 }
