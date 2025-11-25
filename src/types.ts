@@ -31,6 +31,7 @@ declare namespace Ome {
   interface Axis {
     name: string;
     type?: string;
+    unit?: string; // included as part of scale rework to look for units in .zattrs
   }
 
   type CoordinateTransformation =

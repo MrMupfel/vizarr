@@ -601,6 +601,48 @@ export function getCsrfToken(): string | null {
 
 // In utils.ts
 
+// /**
+//  * Determines the physical size unit from NGFF metadata and returns a
+//  * factor to convert that unit to nanometers.
+//  * @param {Ome.Multiscale[]} multiscales The multiscale metadata from .zattrs.
+//  * @param {Ome.Omero} [omero] The omero metadata block, if available.
+//  * @returns {number} A multiplication factor to convert the source unit to nanometers.
+//  */
+// export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome.Omero): number {
+//   const axes = getNgffAxes(multiscales);
+//   const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
+//     typeof axis === 'string' ? { name: axis } : axis
+//   );
+
+//   // 1. Try to get unit from the axes directly (the best way)
+//   const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
+//   let inputUnit = spaceAxis?.unit?.toLowerCase();
+
+//   console.log(`DEBUG: inputUnit: ${inputUnit}`);
+
+//   // // 2. If not found, try from the omero block
+//   // if (!inputUnit && omero?.channels?.[0]?.spatial_calibration_unit) {
+//   //   inputUnit = omero.channels[0].spatial_calibration_unit.toLowerCase();
+//   // }
+
+//   // 3. If still not found, fallback to angstrom
+//   if (!inputUnit) {
+//     inputUnit = 'angstrom';
+//   }
+
+//   console.log(`DEBUG: inputUnit after check: ${inputUnit}`);
+
+//   // Return the factor required to convert the input unit to nanometers
+//   if (inputUnit === 'angstrom') {
+//     return 0.1; // 1 Å = 0.1 nm
+//   }
+//   if (inputUnit === 'micrometer' || inputUnit === 'micron') {
+//     return 1000; // 1 µm = 1000 nm
+//   }
+
+//   return 1; // Default to 1 (e.g., for nanometer)
+// }
+
 /**
  * Determines the physical size unit from NGFF metadata and returns a
  * factor to convert that unit to nanometers.
@@ -609,24 +651,40 @@ export function getCsrfToken(): string | null {
  * @returns {number} A multiplication factor to convert the source unit to nanometers.
  */
 export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome.Omero): number {
-  const axes = getNgffAxes(multiscales);
-  const normalizedAxes = (axes as (Ome.Axis | string)[]).map(axis =>
-    typeof axis === 'string' ? { name: axis } : axis
-  );
+  // 1. Try to get unit from the axes directly (the best way).
+  // We access multiscales[0].axes DIRECTLY to avoid getNgffAxes() stripping metadata.
+  let inputUnit: string | undefined;
 
-  // 1. Try to get unit from the axes directly (the best way)
-  const spaceAxis = normalizedAxes.find(axis => (axis as Ome.Axis).type === 'space' && 'unit' in axis) as Ome.Axis & { unit: string } | undefined;
-  let inputUnit = spaceAxis?.unit?.toLowerCase();
+  const rawAxes = multiscales[0]?.axes;
+
+  if (Array.isArray(rawAxes)) {
+    const spaceAxis = rawAxes.find((axis) => {
+      // We must filter out string axes (legacy v0.2) and look for the Unit property
+      return typeof axis !== 'string' && axis.type === 'space' && 'unit' in axis;
+    }) as Ome.Axis | undefined;
+
+    if (spaceAxis?.unit) {
+      inputUnit = spaceAxis.unit.toLowerCase();
+    }
+  }
+
+  console.debug(`DEBUG: inputUnit: ${inputUnit}`);
 
   // // 2. If not found, try from the omero block
   // if (!inputUnit && omero?.channels?.[0]?.spatial_calibration_unit) {
   //   inputUnit = omero.channels[0].spatial_calibration_unit.toLowerCase();
   // }
 
-  // 3. If still not found, fallback to angstrom
+  // 3. If still not found, fallback to angstrom (legacy logic) or pixel (no conversion)
   if (!inputUnit) {
-    inputUnit = 'angstrom';
+     // Be careful here: if no unit is specified, defaulting to angstrom implies 
+     // you assume the data IS angstrom. If it's actually unitless (pixels), 
+     // you might want to return 1.
+     // However, sticking to your existing fallback logic:
+    inputUnit = 'angstrom'; 
   }
+
+  console.debug(`DEBUG: inputUnit after check: ${inputUnit}`);
 
   // Return the factor required to convert the input unit to nanometers
   if (inputUnit === 'angstrom') {
@@ -635,6 +693,12 @@ export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome
   if (inputUnit === 'micrometer' || inputUnit === 'micron') {
     return 1000; // 1 µm = 1000 nm
   }
+  if (inputUnit === 'millimeter') {
+    return 1000000; // 1 mm = 1,000,000 nm
+  }
+  if (inputUnit === 'meter') {
+      return 1000000000; 
+  }
 
-  return 1; // Default to 1 (e.g., for nanometer)
+  return 1; // Default to 1 (e.g., for nanometer or unknown)
 }
