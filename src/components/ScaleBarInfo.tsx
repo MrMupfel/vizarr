@@ -1,11 +1,14 @@
 // src/components/ScaleBarInfo.tsx
 import * as React from "react";
 import { usePixelSize } from "../hooks";
+import { usingDefaultUnit } from "../utils";
 
 // Component to render the scale bar.
 export default function ScaleBarInfo() {
     // 1. Get the pixel size directly from our custom hook.
     const currentPixelSizeInNm = usePixelSize();
+
+    // console.debug(`DEBUG: usingDefaultUnit: ${usingDefaultUnit}`);
 
     // 2. Calculate the scale bar properties using React.useMemo.
     // This will only re-run when the pixel size changes.
@@ -70,8 +73,27 @@ export default function ScaleBarInfo() {
                 fontSize: '14px',
                 textShadow: '1px 1px 2px black',
                 pointerEvents: 'none',
+                // NEW
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
             }}
         >
+            {usingDefaultUnit && (
+                <div 
+                    title="No unit found in metadata (.zattrs/zarr.json). Defaulted to Angstrom. Correct for .mrc files (e.g SerialEM/IMOD mapping)"
+                    style={{
+                        color: '#ffcc00ff', 
+                        fontSize: '12px',
+                        marginBottom: '4px', 
+                        cursor: 'help',
+                        pointerEvents: 'auto',
+                    }}
+                >
+                    ⚠️ Default Unit
+                </div>
+            )}
+
             <div
                 style={{
                     height: '4px',
@@ -81,7 +103,9 @@ export default function ScaleBarInfo() {
                     boxSizing: 'content-box',
                 }}
             />
-            <div style={{ marginTop: '4px' }}>{scaleBar.text}</div>
+            <div style={{ marginTop: '4px' }}>
+                {scaleBar.text}
+            </div>
         </div>
     );
 }

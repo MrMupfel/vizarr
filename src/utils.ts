@@ -650,7 +650,10 @@ export function getCsrfToken(): string | null {
  * @param {Ome.Omero} [omero] The omero metadata block, if available.
  * @returns {number} A multiplication factor to convert the source unit to nanometers.
  */
+// globval variable to indicate if default unit is being used
+export let usingDefaultUnit = false;
 export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome.Omero): number {
+  usingDefaultUnit = false;
   // 1. Try to get unit from the axes directly (the best way).
   // We access multiscales[0].axes DIRECTLY to avoid getNgffAxes() stripping metadata.
   let inputUnit: string | undefined;
@@ -677,11 +680,9 @@ export function getNmConversionFactor(multiscales: Ome.Multiscale[], omero?: Ome
 
   // 3. If still not found, fallback to angstrom (legacy logic) or pixel (no conversion)
   if (!inputUnit) {
-     // Be careful here: if no unit is specified, defaulting to angstrom implies 
-     // you assume the data IS angstrom. If it's actually unitless (pixels), 
-     // you might want to return 1.
-     // However, sticking to your existing fallback logic:
+    // Setting to 'angstrom' to conform with .mrc IMOD standard. - also including a warning
     inputUnit = 'angstrom'; 
+    usingDefaultUnit = true;
   }
 
   console.debug(`DEBUG: inputUnit after check: ${inputUnit}`);
