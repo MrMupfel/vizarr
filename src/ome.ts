@@ -8,6 +8,57 @@ import * as utils from "./utils";
 
 import { getNmConversionFactor } from "./utils";
 
+// const normalizeCoordinateTransformations = (attrs: any) => {
+//   // 1. Create a deep copy to avoid changing the original object.
+//   const attrsCopy = JSON.parse(JSON.stringify(attrs));
+//   const omeroMeta = utils.isOmeMultiscales(attrsCopy) ? attrsCopy.omero : undefined;
+
+//   // 2. Get the conversion factor needed to get to nanometers.
+//   const conversionFactor = getNmConversionFactor(attrsCopy.multiscales, omeroMeta);
+
+//   // 3. If a conversion is needed, apply it to the scale values.
+//   if (conversionFactor !== 1) {
+//     for (const p of attrsCopy.multiscales) {
+//       for (const d of p.datasets) {
+//         if (d.coordinateTransformations) {
+//           for (const t of d.coordinateTransformations) {
+//             if (t.type === 'scale') {
+//               // This is where 7.87 becomes 0.787
+//               t.scale = t.scale.map((s: number) => s * conversionFactor);
+//             }
+//           }
+//         }
+//       }
+//     }
+//   }
+
+//   // 4. Return the new, corrected object.
+//   return attrsCopy;
+// };
+
+// Helper to apply the factor to a set of attributes
+const applyConversionFactor = (attrs: any, factor: number) => {
+  if (factor === 1) return attrs;
+  const attrsCopy = JSON.parse(JSON.stringify(attrs));
+  for (const p of attrsCopy.multiscales) {
+    for (const d of p.datasets) {
+      if (d.coordinateTransformations) {
+        for (const t of d.coordinateTransformations) {
+          if (t.type === 'scale') {
+            t.scale = t.scale.map((s: number) => s * factor);
+          }
+          // Note: If you have translations (offsets), you might need to scale those too!
+          // Usually 'translation' type should also be scaled if units change.
+          // if (t.type === 'translation') {
+          //    t.translation = t.translation.map((tr: number) => tr * factor);
+          // }
+        }
+      }
+    }
+  }
+  return attrsCopy;
+};
+
 const normalizeCoordinateTransformations = (attrs: any) => {
   // 1. Create a deep copy to avoid changing the original object.
   const attrsCopy = JSON.parse(JSON.stringify(attrs));
@@ -16,24 +67,8 @@ const normalizeCoordinateTransformations = (attrs: any) => {
   // 2. Get the conversion factor needed to get to nanometers.
   const conversionFactor = getNmConversionFactor(attrsCopy.multiscales, omeroMeta);
 
-  // 3. If a conversion is needed, apply it to the scale values.
-  if (conversionFactor !== 1) {
-    for (const p of attrsCopy.multiscales) {
-      for (const d of p.datasets) {
-        if (d.coordinateTransformations) {
-          for (const t of d.coordinateTransformations) {
-            if (t.type === 'scale') {
-              // This is where 7.87 becomes 0.787
-              t.scale = t.scale.map((s: number) => s * conversionFactor);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 4. Return the new, corrected object.
-  return attrsCopy;
+  // 3. Apply using shared helper
+  return applyConversionFactor(attrsCopy, conversionFactor);
 };
 
 export async function loadWell(
@@ -284,7 +319,15 @@ export async function loadOmeMultiscales(
   const axis_labels = utils.getNgffAxisLabels(axes);
   const tileSize = utils.guessTileSize(data[0]);
 
-  const normalizedAttrs = normalizeCoordinateTransformations(attrs);
+  // 1. Calculate the conversion factor explicitly so we can pass it to labels
+  const omeroMeta = utils.isOmeMultiscales(attrs) ? attrs.omero : undefined;
+  const conversionFactor = getNmConversionFactor(attrs.multiscales, omeroMeta);
+
+  // 2. Normalize attributes for the image (using the factor)
+  const normalizedAttrs = applyConversionFactor(attrs, conversionFactor);
+  // --- CHANGED END ---
+
+  // Obsolete: const normalizedAttrs = normalizeCoordinateTransformations(attrs);
 
   let meta: Meta;
   if (utils.isOmeMultiscales(attrs)) {
@@ -309,14 +352,19 @@ export async function loadOmeMultiscales(
     },
     ...meta,
     name: meta.name ?? name,
-    labels: await Promise.all(labels.map((name) => loadOmeImageLabel(grp.resolve("labels"), name))),
+    // Pass Conversion factor to labels as well
+    labels: await Promise.all(labels.map((name) => loadOmeImageLabel(grp.resolve("labels"), name, conversionFactor))),
   };
 }
 
-async function loadOmeImageLabel(root: zarr.Location<zarr.Readable>, name: string): Promise<ImageLabels[number]> {
+async function loadOmeImageLabel(root: zarr.Location<zarr.Readable>, name: string, factor: number = 1): Promise<ImageLabels[number]> {
   const grp = await zarr.open(root.resolve(name), { kind: "group" });
   const attrs = utils.resolveAttrs(grp.attrs);
   utils.assert(utils.isOmeImageLabel(attrs), "No 'image-label' metadata.");
+
+  // Apply same conversion factor to bring labels and image back in line
+  const normalizedAttrs = applyConversionFactor(attrs, factor);
+
   const data = await utils.loadMultiscales(grp, attrs.multiscales);
   const baseResolution = data.at(0);
   utils.assert(baseResolution, "No base resolution found for multiscale labels.");
@@ -326,7 +374,7 @@ async function loadOmeImageLabel(root: zarr.Location<zarr.Readable>, name: strin
   const colors = (attrs["image-label"].colors ?? []).map((d) => ({ labelValue: d["label-value"], rgba: d.rgba }));
   return {
     name,
-    modelMatrix: utils.coordinateTransformationsToMatrix(attrs.multiscales),
+    modelMatrix: utils.coordinateTransformationsToMatrix(normalizedAttrs.multiscales),
     loader: data.map((arr) => new ZarrPixelSource(arr, { labels, tileSize, multiscales: attrs.multiscales })),
     colors: colors.length > 0 ? colors : undefined,
   };

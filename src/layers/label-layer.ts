@@ -54,6 +54,7 @@ export class LabelLayer extends TileLayer<LabelPixelData, LabelLayerProps> {
     };
     utils.assert(dimensions.width && dimensions.height);
     const tileSize = getTileSizeForResolutions(resolutions);
+
     super({
       id: `labels-${props.id}`,
       extent: [0, 0, dimensions.width, dimensions.height],
@@ -94,6 +95,7 @@ export class LabelLayer extends TileLayer<LabelPixelData, LabelLayerProps> {
     const [[left, bottom], [right, top]] = tile.boundingBox;
     utils.assert(props.extent, "missing extent");
     const [_x0, _y0, width, height] = props.extent;
+
     return new GrayscaleBitmapLayer({
       id: `tile-${tile.index.x}.${tile.index.y}.${tile.index.z}-${props.id}`,
       pixelData: data,
